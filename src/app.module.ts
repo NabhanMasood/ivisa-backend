@@ -11,7 +11,7 @@ import { NationalitiesModule } from './nationalities/nationalities.module';
   imports: [
 TypeOrmModule.forRoot({
   type: 'postgres',
-  host: process.env.PGHOST ?? 'localhost',
+  host: process.env.PGHOST ?? 'containers-us-west-189.railway.app',
   port: parseInt(process.env.PGPORT ?? '5432', 10),
   username: process.env.PGUSER ?? 'postgres',
   password: process.env.PGPASSWORD ?? '',
