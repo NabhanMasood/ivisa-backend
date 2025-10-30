@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module} from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -9,20 +10,17 @@ import { NationalitiesModule } from './nationalities/nationalities.module';
 
 @Module({
   imports: [
-TypeOrmModule.forRoot({
-  type: 'postgres',
-  host: process.env.PGHOST ?? 'containers-us-west-189.railway.app',
-  port: parseInt(process.env.PGPORT ?? '5432', 10),
-  username: process.env.PGUSER ?? 'postgres',
-  password: process.env.PGPASSWORD ?? '',
-  database: process.env.PGDATABASE ?? 'railway',
-  ssl:
-    process.env.PGSSLMODE === 'require'
-      ? { rejectUnauthorized: false }
-      : false,
-  autoLoadEntities: true,
-  synchronize: true,
-}),
+ ConfigModule.forRoot({ isGlobal: true }),
+
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      url: process.env.DATABASE_URL,
+      autoLoadEntities: true,
+      synchronize: true,
+      ssl: {
+        rejectUnauthorized: false,
+      },
+    }),
     AuthModule,
     CountriesModule,
     VisaProductModule,
