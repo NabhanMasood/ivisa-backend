@@ -9,16 +9,17 @@ import { NationalitiesModule } from './nationalities/nationalities.module';
 
 @Module({
   imports: [
-  TypeOrmModule.forRoot({
+TypeOrmModule.forRoot({
   type: 'postgres',
-  host: process.env.PGHOST,
-  port: parseInt(process.env.PGPORT, 10),
-  username: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  database: process.env.PGDATABASE,
-  ssl: process.env.PGSSLMODE === 'require'
-    ? { rejectUnauthorized: false }
-    : false,
+  host: process.env.PGHOST ?? 'localhost',
+  port: parseInt(process.env.PGPORT ?? '5432', 10),
+  username: process.env.PGUSER ?? 'postgres',
+  password: process.env.PGPASSWORD ?? '',
+  database: process.env.PGDATABASE ?? 'railway',
+  ssl:
+    process.env.PGSSLMODE === 'require'
+      ? { rejectUnauthorized: false }
+      : false,
   autoLoadEntities: true,
   synchronize: true,
 }),
