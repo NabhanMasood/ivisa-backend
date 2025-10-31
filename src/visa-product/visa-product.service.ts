@@ -83,7 +83,7 @@ export class VisaProductService {
     // Find by country with optional productName search
     async findByCountry(country: string, productName?: string) {
         try {
-            const where: any = { country };
+            const where: any = { country: ILike(country) };
             if (productName) where.productName = ILike(`%${productName}%`);
 
             const result = await this.visaProductRepo.find({ where });
