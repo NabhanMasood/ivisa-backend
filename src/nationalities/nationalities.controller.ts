@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, BadRequestException, HttpCode, HttpStatus, UseFilters } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, BadRequestException, HttpCode, HttpStatus, UseFilters, Param } from '@nestjs/common';
 import { NationalitiesService } from './nationalities.service';
 import { CreateNationalityDto } from './dto/create-nationality.dto';
 import { NationalitiesHttpExceptionFilter } from './http-exception.filter';
@@ -53,5 +53,38 @@ export class NationalitiesController {
   ) {
     const result = await this.service.listDestinationsWithCounts({ nationality, q });
     return { status: true, message: 'Destinations fetched successfully', data: result };
+  }
+
+  // Get destinations for a specific nationality (when view is clicked on nationality)
+  @Get(':nationality/destinations')
+  async getDestinationsByNationality(@Param('nationality') nationality: string) {
+    try {
+      const result = await this.service.getDestinationsByNationality(nationality);
+      return {
+        status: true,
+        message: 'Destinations fetched successfully',
+        data: result,
+      };
+    } catch (err) {
+      throw new BadRequestException({ message: err.message });
+    }
+  }
+
+  // Get products for nationality-destination combination (when view is clicked on destination)
+  @Get(':nationality/:destination/products')
+  async getProductsByNationalityAndDestination(
+    @Param('nationality') nationality: string,
+    @Param('destination') destination: string,
+  ) {
+    try {
+      const result = await this.service.getProductsByNationalityAndDestination(nationality, destination);
+      return {
+        status: true,
+        message: 'Products fetched successfully',
+        data: result,
+      };
+    } catch (err) {
+      throw new BadRequestException({ message: err.message });
+    }
   }
 }
