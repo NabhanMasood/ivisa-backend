@@ -7,6 +7,8 @@ import { AuthModule } from './auth/auth.module';
 import { CountriesModule } from './countries/countries.module';
 import { VisaProductModule } from './visa-product/visa-product.module';
 import { NationalitiesModule } from './nationalities/nationalities.module';
+import { EmbassiesModule } from './embassies/embassies.module';
+import { CustomersModule } from './customers/customers.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { NationalitiesModule } from './nationalities/nationalities.module';
     CountriesModule,
     VisaProductModule,
     NationalitiesModule,
+    EmbassiesModule,
+    CustomersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

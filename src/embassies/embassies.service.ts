@@ -52,7 +52,7 @@ export class EmbassiesService {
 
   async findByDestination(destinationCountry: string, search?: string): Promise<any[]> {
     const query = this.embassyRepo.createQueryBuilder('embassy').where(
-      'embassy.destinationCountry = :destinationCountry',
+      'LOWER(embassy.destinationCountry) = LOWER(:destinationCountry)',
       { destinationCountry },
     );
 
@@ -89,8 +89,8 @@ export class EmbassiesService {
   ): Promise<any[]> {
     const query = this.embassyRepo
       .createQueryBuilder('embassy')
-      .where('embassy.destinationCountry = :destinationCountry', { destinationCountry })
-      .andWhere('embassy.originCountry = :originCountry', { originCountry });
+      .where('LOWER(embassy.destinationCountry) = LOWER(:destinationCountry)', { destinationCountry })
+      .andWhere('LOWER(embassy.originCountry) = LOWER(:originCountry)', { originCountry });
 
     if (search) {
       query.andWhere(
