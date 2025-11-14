@@ -5,5 +5,8 @@ export class UpdateCountryDto {
   @IsOptional()
   @IsNotEmpty({ message: 'Country name cannot be empty' })
   countryName?: string;
-}
 
+  @IsString()
+  @IsOptional()
+  logoUrl?: string;
+}

@@ -9,9 +9,6 @@ export class CreateCustomerDto {
   @IsNotEmpty({ message: 'Email is required' })
   email: string;
 
-  @IsString()
-  @IsNotEmpty({ message: 'Phone is required' })
-  phone: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Residence country is required' })

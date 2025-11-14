@@ -13,11 +13,6 @@ export class UpdateCustomerDto {
 
   @IsString()
   @IsOptional()
-  @IsNotEmpty({ message: 'Phone cannot be empty' })
-  phone?: string;
-
-  @IsString()
-  @IsOptional()
   @IsNotEmpty({ message: 'Residence country cannot be empty' })
   residenceCountry?: string;
 

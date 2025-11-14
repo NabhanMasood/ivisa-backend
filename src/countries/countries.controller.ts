@@ -1,16 +1,94 @@
-import { Controller, Get, Post, Body, Query, BadRequestException, Param, Patch, Delete, ParseIntPipe } from '@nestjs/common';
+import { 
+  Controller, 
+  Get, 
+  Post, 
+  Body, 
+  Query, 
+  BadRequestException, 
+  Param, 
+  Patch, 
+  Delete, 
+  ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
+  HttpException,
+  HttpStatus
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import sharp from 'sharp'; // Changed from: import * as sharp from 'sharp'
 import { CountriesService } from './countries.service';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
+import * as fs from 'fs';
 
 @Controller('countries')
 export class CountriesController {
   constructor(private readonly countriesService: CountriesService) {}
 
   @Post()
-  async create(@Body() createDto: CreateCountryDto) {
+  @UseInterceptors(
+    FileInterceptor('logo', {
+      storage: diskStorage({
+        destination: './uploads/countries',
+        filename: (req, file, cb) => {
+          const randomName = Array(32)
+            .fill(null)
+            .map(() => Math.round(Math.random() * 16).toString(16))
+            .join('');
+          cb(null, `${randomName}${extname(file.originalname)}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+          return cb(
+            new HttpException(
+              'Only image files are allowed!',
+              HttpStatus.BAD_REQUEST,
+            ),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+      limits: {
+        fileSize: 1024 * 1024, // 1MB limit
+      },
+    }),
+  )
+  async create(
+    @Body() createDto: CreateCountryDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
     try {
-      const country = await this.countriesService.create(createDto);
+      let logoUrl: string | undefined = undefined; // Fixed type
+
+      if (file) {
+        // Resize image to 32x32
+        const resizedImagePath = file.path.replace(
+          extname(file.path),
+          '-32x32' + extname(file.path),
+        );
+        
+        await sharp(file.path)
+          .resize(32, 32, {
+            fit: 'cover',
+            position: 'center',
+          })
+          .toFile(resizedImagePath);
+
+        // Delete original file
+        fs.unlinkSync(file.path);
+
+        logoUrl = `/uploads/countries/${resizedImagePath.split('/').pop()}`; // Fixed type
+      }
+
+      const country = await this.countriesService.create({
+        ...createDto,
+        logoUrl, // Now correctly typed as string | undefined
+      });
+
       return {
         status: true,
         message: 'Country created successfully',
@@ -60,9 +138,66 @@ export class CountriesController {
   }
 
   @Patch(':id')
-  async update(@Param('id', ParseIntPipe) id: number, @Body() updateDto: UpdateCountryDto) {
+  @UseInterceptors(
+    FileInterceptor('logo', {
+      storage: diskStorage({
+        destination: './uploads/countries',
+        filename: (req, file, cb) => {
+          const randomName = Array(32)
+            .fill(null)
+            .map(() => Math.round(Math.random() * 16).toString(16))
+            .join('');
+          cb(null, `${randomName}${extname(file.originalname)}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
+          return cb(
+            new HttpException(
+              'Only image files are allowed!',
+              HttpStatus.BAD_REQUEST,
+            ),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+      limits: {
+        fileSize: 1024 * 1024,
+      },
+    }),
+  )
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateDto: UpdateCountryDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
     try {
-      const country = await this.countriesService.update(id, updateDto);
+      let logoUrl = updateDto.logoUrl;
+
+      if (file) {
+        const resizedImagePath = file.path.replace(
+          extname(file.path),
+          '-32x32' + extname(file.path),
+        );
+        
+        await sharp(file.path)
+          .resize(32, 32, {
+            fit: 'cover',
+            position: 'center',
+          })
+          .toFile(resizedImagePath);
+
+        fs.unlinkSync(file.path);
+
+        logoUrl = `/uploads/countries/${resizedImagePath.split('/').pop()}`;
+      }
+
+      const country = await this.countriesService.update(id, {
+        ...updateDto,
+        logoUrl,
+      });
+
       return {
         status: true,
         message: 'Country updated successfully',

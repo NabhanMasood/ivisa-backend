@@ -61,7 +61,6 @@ export class CustomersService {
           id: customer.id,
           name: customer.fullname,
           email: customer.email,
-          phone: customer.phone,
           totalApplications,
           status: customer.status,
         };
@@ -81,7 +80,6 @@ export class CustomersService {
         id: customer.id,
         customerName: customer.fullname,
         email: customer.email,
-        phone: customer.phone,
         residenceCountry: customer.residenceCountry,
         createdDate: customer.createdAt.toISOString().split('T')[0],
         createdAt: customer.createdAt.toLocaleDateString('en-GB', {

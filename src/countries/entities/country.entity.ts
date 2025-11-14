@@ -8,6 +8,9 @@ export class Country {
   @Column()
   countryName: string;
 
+  @Column({ nullable: true })
+  logoUrl: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

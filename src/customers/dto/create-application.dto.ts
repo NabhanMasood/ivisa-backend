@@ -28,4 +28,3 @@ export class CreateApplicationDto {
   })
   status?: string;
 }
-

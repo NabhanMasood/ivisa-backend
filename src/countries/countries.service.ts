@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Country } from './entities/country.entity';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
@@ -39,6 +39,7 @@ export class CountriesService {
     return countries.map(c => ({
       id: c.id,
       countryName: c.countryName,
+      logoUrl: c.logoUrl,
       createdAt: c.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
       updatedAt: c.updatedAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
     }));
@@ -53,6 +54,7 @@ export class CountriesService {
       return {
         id: country.id,
         countryName: country.countryName,
+        logoUrl: country.logoUrl,
         createdAt: country.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
         updatedAt: country.updatedAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
       };
@@ -96,6 +98,17 @@ export class CountriesService {
       if (!country) {
         throw new NotFoundException(`Country with ID ${id} not found`);
       }
+      
+      // Delete logo file if exists
+      if (country.logoUrl) {
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join('.', country.logoUrl);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+      
       await this.countryRepo.remove(country);
     } catch (error) {
       if (error instanceof NotFoundException) {

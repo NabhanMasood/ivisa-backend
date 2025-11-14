@@ -12,9 +12,6 @@ export class Customer {
   email: string;
 
   @Column()
-  phone: string;
-
-  @Column()
   residenceCountry: string;
 
   @Column({ default: 'Active' })
