@@ -30,19 +30,21 @@ import { CardInfoModule } from './card-info/card-info.module';
         // Parse DATABASE_URL if provided (Railway, Heroku, etc.)
         if (process.env.DATABASE_URL) {
           const url = new URL(process.env.DATABASE_URL);
-          return {
-            type: 'postgres',
+          const config = {
+            type: 'postgres' as const,
             host: url.hostname,
             port: parseInt(url.port, 10),
             username: url.username,
             password: url.password,
             database: url.pathname.slice(1), // Remove leading '/'
-            ssl: process.env.NODE_ENV === 'production' 
-              ? { rejectUnauthorized: false }
-              : false,
+            ssl: { rejectUnauthorized: false }, // Railway requires SSL
             autoLoadEntities: true,
             synchronize: true,
+            retryAttempts: 5,
+            retryDelay: 3000,
           };
+          console.log(`Connecting to database: ${url.hostname}:${url.port}/${url.pathname.slice(1)}`);
+          return config;
         }
         
         // Fall back to individual environment variables

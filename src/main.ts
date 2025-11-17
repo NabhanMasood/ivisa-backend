@@ -10,7 +10,18 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.enableCors();
+  // Configure CORS with explicit origins
+  app.enableCors({
+    origin: [
+      'https://ivisa123-landing.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean), // Remove undefined values
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
 
   app.use(cookieParser());
 
@@ -28,12 +39,22 @@ async function bootstrap() {
     prefix: '/uploads/',
   });
 
-  const dataSource = app.get(DataSource);
-  await seedAdmins(dataSource);
+  // Seed admins with error handling
+  try {
+    const dataSource = app.get(DataSource);
+    await seedAdmins(dataSource);
+  } catch (error) {
+    console.error('Error seeding admins:', error);
+    // Don't crash the app if seeding fails
+  }
 
   // Use PORT from environment or fallback to 5000
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
   await app.listen(port);
   console.log(`Server running on http://localhost:${port}`);
 }
-bootstrap();
+
+bootstrap().catch((error) => {
+  console.error('Failed to start application:', error);
+  process.exit(1);
+});
