@@ -11,13 +11,18 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Configure CORS with explicit origins
+  const allowedOrigins: string[] = [
+    'https://ivisa123-landing.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173',
+  ];
+  
+  if (process.env.FRONTEND_URL) {
+    allowedOrigins.push(process.env.FRONTEND_URL);
+  }
+
   app.enableCors({
-    origin: [
-      'https://ivisa123-landing.vercel.app',
-      'http://localhost:3000',
-      'http://localhost:5173',
-      process.env.FRONTEND_URL,
-    ].filter(Boolean), // Remove undefined values
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
