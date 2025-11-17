@@ -1,4 +1,4 @@
-import {
+  import {
     Controller,
     Get,
     Post,
@@ -7,6 +7,7 @@ import {
     ParseIntPipe,
     BadRequestException,
     Patch,
+    Query,
   } from '@nestjs/common';
   import { PaymentsService } from './payments.service';
   import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -64,7 +65,6 @@ import {
         });
       }
     }
-  
     /**
      * GET /payments/summary
      * Get payment statistics
@@ -80,7 +80,6 @@ import {
         });
       }
     }
-  
     /**
      * GET /payments/application/:applicationId
      * Get payment by application ID
@@ -98,7 +97,42 @@ import {
         });
       }
     }
-  
+
+    /**
+     * GET /payments/customer/:customerId
+     * Get all payments for a specific customer (optionally filtered by status)
+     */
+    @Get('customer/:customerId')
+    async findByCustomer(
+      @Param('customerId', ParseIntPipe) customerId: number,
+      @Query('status') status?: string,
+    ) {
+      try {
+        return await this.paymentsService.findByCustomer(customerId, status);
+      } catch (error) {
+        throw new BadRequestException({
+          status: false,
+          message: error.message || 'Failed to fetch customer payments',
+        });
+      }
+    }
+
+    /**
+     * GET /payments
+     * Get all payments (optionally filtered by status)
+     */
+    @Get()
+    async findAll(@Query('status') status?: string) {
+      try {
+        return await this.paymentsService.findAll(status);
+      } catch (error) {
+        throw new BadRequestException({
+          status: false,
+          message: error.message || 'Failed to fetch payments',
+        });
+      }
+    }
+
     /**
      * GET /payments/:id
      * Get payment by ID

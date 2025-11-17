@@ -12,7 +12,21 @@ import { CustomersModule } from './customers/customers.module';
 import { VisaApplicationsModule } from './visa-applications/visa-applications.module';
 import { TravelersModule } from './travelers/travelers.module';
 import { PaymentsModule } from './payments/payments.module';
+<<<<<<< HEAD
+<<<<<<< HEAD
+import { CouponsModule } from './coupons/coupons.module';
+<<<<<<< Updated upstream
+=======
 import { ProcessingOptionsModule } from './processing-options/processing-options.module';
+>>>>>>> origin/main
+=======
+import { CardInfoModule } from './card-info/card-info.module';
+import { StripeModule } from './stripe/stripe.module';
+
+>>>>>>> Stashed changes
+=======
+import { ProcessingOptionsModule } from './processing-options/processing-options.module';
+>>>>>>> origin/main
 
 @Module({
   imports: [
@@ -47,7 +61,20 @@ import { ProcessingOptionsModule } from './processing-options/processing-options
     VisaApplicationsModule,
     TravelersModule,
     PaymentsModule,
+<<<<<<< HEAD
+<<<<<<< HEAD
+    CouponsModule,
+<<<<<<< Updated upstream
+=======
     ProcessingOptionsModule,
+>>>>>>> origin/main
+=======
+    CardInfoModule,
+    StripeModule,
+>>>>>>> Stashed changes
+=======
+    ProcessingOptionsModule,
+>>>>>>> origin/main
   ],
   controllers: [AppController],
   providers: [AppService],

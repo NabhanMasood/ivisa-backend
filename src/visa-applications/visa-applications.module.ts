@@ -5,10 +5,15 @@ import { VisaApplicationsController } from './visa-applications.controller';
 import { VisaApplication } from './entities/visa-application.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { VisaProduct } from '../visa-product/entities/visa-product.entity';
+import { Traveler } from '../travelers/entities/traveler.entity';
+import { CouponsModule } from '../coupons/coupons.module';
+import { CardInfoModule } from '../card-info/card-info.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([VisaApplication, Customer, VisaProduct]),
+    TypeOrmModule.forFeature([VisaApplication, Customer, VisaProduct, Traveler]),
+    CouponsModule, // Import to use CouponsService
+    CardInfoModule, // Import to use CardInfoService
   ],
   controllers: [VisaApplicationsController],
   providers: [VisaApplicationsService],

@@ -37,6 +37,18 @@ export class CustomersController {
     }
   }
 
+  @Get('summary')
+  async getSummary() {
+    try {
+      return await this.customersService.getSummary();
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to fetch customer summary',
+      });
+    }
+  }
+
   @Get()
   async findAll(@Query('search') search: string) {
     try {
@@ -51,95 +63,6 @@ export class CustomersController {
       throw new BadRequestException({
         status: false,
         message: error.message || 'Failed to fetch customers',
-      });
-    }
-  }
-
-  // Application Endpoints (must be before :id routes to avoid route conflicts)
-  @Post('applications')
-  async createApplication(@Body() createDto: CreateApplicationDto) {
-    try {
-      const application = await this.customersService.createApplication(createDto);
-      return {
-        status: true,
-        message: 'Application created successfully',
-        data: application,
-      };
-    } catch (error) {
-      throw new BadRequestException({
-        status: false,
-        message: error.message || 'Failed to create application',
-      });
-    }
-  }
-
-  @Get('applications/all')
-  async findAllApplications(@Query('search') search: string) {
-    try {
-      const applications = await this.customersService.findAllApplications(search);
-      return {
-        status: true,
-        message: 'Applications retrieved successfully',
-        count: applications.length,
-        data: applications,
-      };
-    } catch (error) {
-      throw new BadRequestException({
-        status: false,
-        message: error.message || 'Failed to fetch applications',
-      });
-    }
-  }
-
-  @Get('applications/:id')
-  async findOneApplication(@Param('id', ParseIntPipe) id: number) {
-    try {
-      const application = await this.customersService.findOneApplication(id);
-      return {
-        status: true,
-        message: 'Application retrieved successfully',
-        data: application,
-      };
-    } catch (error) {
-      throw new BadRequestException({
-        status: false,
-        message: error.message || 'Failed to fetch application',
-      });
-    }
-  }
-
-  @Patch('applications/:id')
-  async updateApplication(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateDto: UpdateApplicationDto,
-  ) {
-    try {
-      const application = await this.customersService.updateApplication(id, updateDto);
-      return {
-        status: true,
-        message: 'Application updated successfully',
-        data: application,
-      };
-    } catch (error) {
-      throw new BadRequestException({
-        status: false,
-        message: error.message || 'Failed to update application',
-      });
-    }
-  }
-
-  @Delete('applications/:id')
-  async removeApplication(@Param('id', ParseIntPipe) id: number) {
-    try {
-      await this.customersService.removeApplication(id);
-      return {
-        status: true,
-        message: 'Application deleted successfully',
-      };
-    } catch (error) {
-      throw new BadRequestException({
-        status: false,
-        message: error.message || 'Failed to delete application',
       });
     }
   }

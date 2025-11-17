@@ -101,38 +101,93 @@ import {
           where: { id: bulkDto.applicationId },
           relations: ['travelers'],
         });
+<<<<<<< HEAD
+<<<<<<< HEAD
+    
+=======
   
+>>>>>>> origin/main
+=======
+  
+>>>>>>> origin/main
         if (!application) {
           throw new NotFoundException(
             `Visa application with ID ${bulkDto.applicationId} not found`,
           );
         }
+<<<<<<< HEAD
+<<<<<<< HEAD
+    
+=======
   
+>>>>>>> origin/main
+=======
+  
+>>>>>>> origin/main
         // Check if application is still in draft/submitted status
         if (!['draft', 'submitted'].includes(application.status)) {
           throw new BadRequestException(
             `Cannot add travelers to application with status: ${application.status}`,
           );
         }
+<<<<<<< HEAD
+<<<<<<< HEAD
+    
+=======
   
+>>>>>>> origin/main
+=======
+  
+>>>>>>> origin/main
         // Check if the number of travelers matches
         const currentTravelerCount = application.travelers?.length || 0;
         const newTravelerCount = bulkDto.travelers.length;
         const totalCount = currentTravelerCount + newTravelerCount;
+<<<<<<< HEAD
+<<<<<<< HEAD
+    
+=======
   
+>>>>>>> origin/main
+=======
+  
+>>>>>>> origin/main
         if (totalCount > application.numberOfTravelers) {
           throw new BadRequestException(
             `Total travelers (${totalCount}) exceeds application limit (${application.numberOfTravelers})`,
           );
         }
+<<<<<<< HEAD
+<<<<<<< HEAD
+    
+        // Validate that the first traveler has an email
+        if (bulkDto.travelers.length > 0 && !bulkDto.travelers[0].email) {
+          throw new BadRequestException(
+            'The first traveler must have an email address',
+          );
+        }
+    
+=======
   
+>>>>>>> origin/main
+=======
+  
+>>>>>>> origin/main
         // Create all travelers
         const travelers = bulkDto.travelers.map((travelerData) => {
           return this.travelerRepo.create({
             applicationId: bulkDto.applicationId,
             firstName: travelerData.firstName,
             lastName: travelerData.lastName,
+<<<<<<< HEAD
+<<<<<<< HEAD
+            email: travelerData.email || undefined, // Change null to undefined
+=======
             email: travelerData.email,
+>>>>>>> origin/main
+=======
+            email: travelerData.email,
+>>>>>>> origin/main
             dateOfBirth: new Date(travelerData.dateOfBirth),
             passportNationality: travelerData.passportNationality,
             passportNumber: travelerData.passportNumber,
@@ -145,9 +200,21 @@ import {
             notes: travelerData.notes,
           });
         });
+<<<<<<< HEAD
+<<<<<<< HEAD
+    
+        const result = await this.travelerRepo.save(travelers);
+    
+=======
   
         const result = await this.travelerRepo.save(travelers);
   
+>>>>>>> origin/main
+=======
+  
+        const result = await this.travelerRepo.save(travelers);
+  
+>>>>>>> origin/main
         return {
           status: true,
           message: `${result.length} traveler(s) added successfully`,

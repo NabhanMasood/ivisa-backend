@@ -69,8 +69,9 @@ import {
         // Create payment record
         const payment = this.paymentRepo.create({
           applicationId: intentDto.applicationId,
+          customerId: application.customerId, // Link to customer
           amount: intentDto.amount || application.totalAmount,
-          currency: intentDto.currency || 'PKR',
+          currency: intentDto.currency || 'USD',
           paymentMethod: intentDto.paymentMethod || 'card',
           paymentGateway: 'stripe', // Default gateway
           status: 'pending',
@@ -233,8 +234,9 @@ import {
         // Create payment
         const payment = this.paymentRepo.create({
           applicationId: createDto.applicationId,
+          customerId: application.customerId, // Link to customer
           amount: createDto.amount,
-          currency: createDto.currency || 'PKR',
+          currency: createDto.currency || 'USD',
           paymentMethod: createDto.paymentMethod,
           paymentGateway: createDto.paymentGateway || 'manual',
           status: 'pending',
@@ -278,7 +280,7 @@ import {
   
         const payment = await this.paymentRepo.findOne({
           where: { applicationId },
-          relations: ['application'],
+          relations: ['application', 'customer'],
         });
   
         if (!payment) {
@@ -294,6 +296,13 @@ import {
             id: payment.id,
             applicationId: payment.applicationId,
             applicationNumber: payment.application?.applicationNumber,
+            customerId: payment.customerId,
+            customer: payment.customer ? {
+              id: payment.customer.id,
+              fullname: payment.customer.fullname,
+              email: payment.customer.email,
+              phoneNumber: payment.customer.phoneNumber,
+            } : null,
             amount: parseFloat(payment.amount.toString()),
             currency: payment.currency,
             paymentMethod: payment.paymentMethod,
@@ -324,7 +333,7 @@ import {
       try {
         const payment = await this.paymentRepo.findOne({
           where: { id },
-          relations: ['application'],
+          relations: ['application', 'customer'],
         });
   
         if (!payment) {
@@ -334,7 +343,15 @@ import {
         return {
           status: true,
           message: 'Payment retrieved successfully',
-          data: payment,
+          data: {
+            ...payment,
+            customer: payment.customer ? {
+              id: payment.customer.id,
+              fullname: payment.customer.fullname,
+              email: payment.customer.email,
+              phoneNumber: payment.customer.phoneNumber,
+            } : null,
+          },
         };
       } catch (error) {
         if (error instanceof NotFoundException) {
@@ -423,6 +440,118 @@ import {
       }
     }
   
+    /**
+     * Get all payments
+     */
+    async findAll(status?: string) {
+      try {
+        const where: any = {};
+        if (status) {
+          where.status = status;
+        }
+
+        const payments = await this.paymentRepo.find({
+          where,
+          relations: ['application', 'customer'],
+          order: { createdAt: 'DESC' },
+        });
+
+        return {
+          status: true,
+          message: 'Payments retrieved successfully',
+          count: payments.length,
+          data: payments.map((payment) => ({
+            id: payment.id,
+            applicationId: payment.applicationId,
+            applicationNumber: payment.application?.applicationNumber,
+            customerId: payment.customerId,
+            customer: payment.customer ? {
+              id: payment.customer.id,
+              fullname: payment.customer.fullname,
+              email: payment.customer.email,
+              phoneNumber: payment.customer.phoneNumber,
+            } : null,
+            amount: parseFloat(payment.amount.toString()),
+            currency: payment.currency,
+            paymentMethod: payment.paymentMethod,
+            paymentGateway: payment.paymentGateway,
+            status: payment.status,
+            transactionId: payment.transactionId,
+            cardholderName: payment.cardholderName,
+            cardLast4: payment.cardLast4,
+            cardBrand: payment.cardBrand,
+            paidAt: payment.paidAt,
+            failedAt: payment.failedAt,
+            failureReason: payment.failureReason,
+            refundedAt: payment.refundedAt,
+            refundReason: payment.refundReason,
+            createdAt: payment.createdAt,
+            updatedAt: payment.updatedAt,
+          })),
+        };
+      } catch (error) {
+        throw new BadRequestException(
+          error.message || 'Error fetching payments',
+        );
+      }
+    }
+
+    /**
+     * Get payments by customer ID
+     */
+    async findByCustomer(customerId: number, status?: string) {
+      try {
+        const where: any = { customerId };
+        if (status) {
+          where.status = status;
+        }
+
+        const payments = await this.paymentRepo.find({
+          where,
+          relations: ['application', 'customer'],
+          order: { createdAt: 'DESC' },
+        });
+
+        return {
+          status: true,
+          message: 'Customer payments retrieved successfully',
+          count: payments.length,
+          data: payments.map((payment) => ({
+            id: payment.id,
+            applicationId: payment.applicationId,
+            applicationNumber: payment.application?.applicationNumber,
+            customerId: payment.customerId,
+            customer: payment.customer ? {
+              id: payment.customer.id,
+              fullname: payment.customer.fullname,
+              email: payment.customer.email,
+              phoneNumber: payment.customer.phoneNumber,
+            } : null,
+            amount: parseFloat(payment.amount.toString()),
+            currency: payment.currency,
+            paymentMethod: payment.paymentMethod,
+            paymentGateway: payment.paymentGateway,
+            status: payment.status,
+            transactionId: payment.transactionId,
+            cardholderName: payment.cardholderName,
+            cardLast4: payment.cardLast4,
+            cardBrand: payment.cardBrand,
+            paidAt: payment.paidAt,
+            failedAt: payment.failedAt,
+            failureReason: payment.failureReason,
+            refundedAt: payment.refundedAt,
+            refundReason: payment.refundReason,
+            createdAt: payment.createdAt,
+            updatedAt: payment.updatedAt,
+          })),
+        };
+      } catch (error) {
+        throw new BadRequestException(
+          error.message || 'Error fetching customer payments',
+        );
+      }
+    }
+
     /**
      * Get payment summary statistics
      */

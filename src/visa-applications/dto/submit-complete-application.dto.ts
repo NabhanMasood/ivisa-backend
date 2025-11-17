@@ -1,143 +1,207 @@
 import {
-    IsString,
-    IsNotEmpty,
-    IsNumber,
-    Min,
-    IsIn,
-    IsArray,
-    ValidateNested,
-    ArrayMinSize,
-    IsEmail,
-    IsDateString,
-    IsBoolean,
-    IsOptional,
-  } from 'class-validator';
-  import { Type } from 'class-transformer';
-  
-  // Traveler with passport data combined
-  class CompleteTravelerDto {
-    @IsString()
-    @IsNotEmpty()
-    firstName: string;
-  
-    @IsString()
-    @IsNotEmpty()
-    lastName: string;
-  
-    @IsEmail()
-    @IsNotEmpty()
-    email: string;
-  
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  Min,
+  IsArray,
+  ValidateNested,
+  ArrayMinSize,
+  IsEmail,
+  IsDateString,
+  IsBoolean,
+  IsOptional,
+  Matches,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
-    @IsDateString()
-    @IsNotEmpty()
-    dateOfBirth: string;
-  
-  
-    // Passport details
-    @IsString()
-    @IsNotEmpty()
-    passportNationality: string;
-  
-    @IsString()
-    @IsNotEmpty()
-    passportNumber: string;
-  
-    @IsDateString()
-    @IsNotEmpty()
-    passportExpiryDate: string;
-  
-    @IsString()
-    @IsNotEmpty()
-    residenceCountry: string;
-  
-    @IsBoolean()
-    @IsNotEmpty()
-    hasSchengenVisa: boolean;
-  
-    @IsString()
-    @IsOptional()
-    placeOfBirth?: string;
-  }
-  
-  // Payment data
-  class CompletePaymentDto {
-    @IsString()
-    @IsNotEmpty()
-    cardholderName: string;
-  
-    @IsString()
-    @IsOptional()
-    cardLast4?: string;
-  
-    @IsString()
-    @IsOptional()
-    cardBrand?: string;
-  
-    @IsString()
-    @IsOptional()
-    transactionId?: string;
-  
-    @IsString()
-    @IsOptional()
-    paymentIntentId?: string;
-  
-    @IsString()
-    @IsOptional()
-    paymentGateway?: string;
-  }
-  
-  export class SubmitCompleteApplicationDto {
-    // Trip Info (Step 1)
-    @IsNumber()
-    @IsOptional()
-    customerId?: number; // Optional - will be created from first traveler if not provided
-  
-    @IsNumber()
-    @IsNotEmpty({ message: 'Visa Product ID is required' })
-    visaProductId: number;
-  
-    @IsString()
-    @IsNotEmpty({ message: 'Nationality is required' })
-    nationality: string;
-  
-    @IsString()
-    @IsNotEmpty({ message: 'Destination country is required' })
-    destinationCountry: string;
-  
-    @IsString()
-    @IsNotEmpty({ message: 'Visa type is required' })
-    @IsIn(['180-single', '180-multiple', '90-single'])
-    visaType: string;
-  
-    @IsNumber()
-    @Min(1)
-    numberOfTravelers: number;
-  
-    // Travelers with passport data (Step 2 & 3)
-    @IsArray()
-    @ArrayMinSize(1, { message: 'At least one traveler is required' })
-    @ValidateNested({ each: true })
-    @Type(() => CompleteTravelerDto)
-    travelers: CompleteTravelerDto[];
-  
-    // Processing selection (Step 4)
-    @IsString()
-    @IsNotEmpty({ message: 'Processing type is required' })
-    @IsIn(['standard', 'rush', 'super-rush'])
-    processingType: string;
-  
-    @IsNumber()
-    @Min(0)
-    processingFee: number;
-  
-    // Payment data (Step 5)
-    @ValidateNested()
-    @Type(() => CompletePaymentDto)
-    payment: CompletePaymentDto;
-  
-    // Optional
-    @IsString()
-    @IsOptional()
-    notes?: string;
-  }
+// Traveler with passport data combined
+class CompleteTravelerDto {
+  @IsString()
+  @IsNotEmpty()
+  firstName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  lastName: string;
+
+  @IsEmail({}, { message: 'Please provide a valid email' })
+  @IsOptional() 
+  email?: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  dateOfBirth: string;
+
+  // Passport details
+  @IsString()
+  @IsNotEmpty()
+  passportNationality: string;
+
+  @IsString()
+  @IsNotEmpty()
+  passportNumber: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  passportExpiryDate: string;
+
+  @IsString()
+  @IsNotEmpty()
+  residenceCountry: string;
+
+  @IsBoolean()
+  @IsNotEmpty()
+  hasSchengenVisa: boolean;
+
+  @IsString()
+  @IsOptional()
+  placeOfBirth?: string;
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
+}
+
+// Payment data
+class CompletePaymentDto {
+  @IsNumber()
+  @IsOptional()
+  cardInfoId?: number; // ID of saved card if using a saved card
+
+  @IsString()
+  @IsOptional()
+  cardholderName?: string; // Required if not using saved card
+
+  @IsString()
+  @IsOptional()
+  cardLast4?: string;
+
+  @IsString()
+  @IsOptional()
+  cardBrand?: string;
+
+  @IsString()
+  @IsOptional()
+  expiryMonth?: string; // For saving new card
+
+  @IsString()
+  @IsOptional()
+  expiryYear?: string; // For saving new card
+
+  @IsString()
+  @IsOptional()
+  paymentMethodId?: string; // Stripe payment method ID
+
+  @IsString()
+  @IsOptional()
+  transactionId?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentIntentId?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentGateway?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  saveCard?: boolean; // Whether to save this card for future use
+}
+
+export class SubmitCompleteApplicationDto {
+  // Trip Info (Step 1)
+  @IsNumber()
+  @IsOptional()
+  customerId?: number;
+
+  @IsNumber()
+  @IsNotEmpty({ message: 'Visa Product ID is required' })
+  visaProductId: number;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Nationality is required' })
+  nationality: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Destination country is required' })
+  destinationCountry: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Visa type is required' })
+  @Matches(/^\d+-(single|multiple)$/, {
+    message: 'Visa type must be in format: {validity}-{entryType} (e.g., 60-single, 90-multiple, 180-single)',
+  })
+  visaType: string;
+
+  @IsNumber()
+  @Min(1)
+  numberOfTravelers: number;
+
+  @IsString()
+  @IsOptional()
+  phoneNumber?: string;
+
+  @IsArray()
+  @ArrayMinSize(1, { message: 'At least one traveler is required' })
+  @ValidateNested({ each: true })
+  @Type(() => CompleteTravelerDto)
+  travelers: CompleteTravelerDto[];
+
+  // Processing selection (Step 4) - FIXED: Accept any string
+  @IsString()
+  @IsNotEmpty({ message: 'Processing type is required' })
+  // ❌ REMOVED: @IsIn(['standard', 'rush', 'super-rush'])
+  processingType: string;
+
+  @IsString()
+  @IsOptional()
+  processingTime?: string; // e.g., "5 days", "24 hours"
+
+  @IsNumber()
+  @Min(0)
+  processingFee: number;
+
+  @IsNumber()
+  @IsOptional()
+  processingFeeId?: number; // ID from processing_fees table
+
+  // Fees
+  @IsNumber()
+  @Min(0)
+  govtFee: number;
+
+  @IsNumber()
+  @Min(0)
+  serviceFee: number;
+
+  @IsNumber()
+  @Min(0)
+  totalAmount: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  discountAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  couponCode?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentMethod?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentStatus?: string;
+
+  @ValidateNested()
+  @Type(() => CompletePaymentDto)
+  payment: CompletePaymentDto;
+
+  // Optional
+  @IsString()
+  @IsOptional()
+  notes?: string;
+}

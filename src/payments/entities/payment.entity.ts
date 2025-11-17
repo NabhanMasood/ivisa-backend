@@ -5,9 +5,12 @@ import {
     CreateDateColumn,
     UpdateDateColumn,
     OneToOne,
+    ManyToOne,
     JoinColumn,
   } from 'typeorm';
   import { VisaApplication } from '../../visa-applications/entities/visa-application.entity';
+  import { CardInfo } from '../../card-info/entities/card-info.entity';
+  import { Customer } from '../../customers/entities/customer.entity';
   
   @Entity('payments')
   export class Payment {
@@ -23,12 +26,20 @@ import {
   
     @Column()
     applicationId: number;
+
+    // Link to customer (Many-to-One)
+    @ManyToOne(() => Customer, { eager: false, nullable: true })
+    @JoinColumn({ name: 'customerId' })
+    customer: Customer;
+
+    @Column({ nullable: true })
+    customerId: number;
   
     // Payment Amount
     @Column('decimal', { precision: 10, scale: 2 })
     amount: number;
   
-    @Column({ default: 'PKR' })
+    @Column({ default: 'USD' })
     currency: string; // PKR, USD, EUR, etc.
   
     // Payment Method
@@ -45,7 +56,15 @@ import {
     @Column({ nullable: true })
     paymentGateway: string; // stripe, paypal, razorpay, etc.
   
-    // Card Details (for card payments)
+    // Reference to saved card (optional - for payments using saved cards)
+    @ManyToOne(() => CardInfo, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'cardInfoId' })
+    cardInfo: CardInfo;
+  
+    @Column({ nullable: true })
+    cardInfoId: number;
+  
+    // Card Details (for card payments - kept for backward compatibility and one-time payments)
     @Column({ nullable: true })
     cardholderName: string;
   

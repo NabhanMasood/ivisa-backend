@@ -122,7 +122,7 @@ export class NationalitiesService {
     return destinations.map(d => d.destination);
   }
 
-  // Get products (productNames with details) for a nationality-destination combination
+  // ✅ FIXED: Get products (productNames with details) for a nationality-destination combination
   async getProductsByNationalityAndDestination(nationality: string, destination: string) {
     if (!nationality || !nationality.trim()) {
       throw new BadRequestException('Nationality is required');
@@ -131,7 +131,6 @@ export class NationalitiesService {
       throw new BadRequestException('Destination is required');
     }
 
-    // Get productNames from nationality table (case-insensitive)
     const nationalityProducts = await this.nationalityRepo
       .createQueryBuilder('n')
       .where('LOWER(n.nationality) = LOWER(:nationality)', { nationality })
@@ -139,17 +138,25 @@ export class NationalitiesService {
       .orderBy('n.productName', 'ASC')
       .getMany();
 
-    // Get full details from visa_product table for each productName
     const products: Array<{
+      id: number; 
       productName: string;
       duration: number;
       validity: number;
+      visaType: string;  
+      entryType: string; 
       govtFee: number;
       serviceFee: number;
       totalAmount: number;
     }> = [];
 
+    const processedProducts = new Set<string>();
+
     for (const np of nationalityProducts) {
+      if (processedProducts.has(np.productName.toLowerCase())) {
+        continue;
+      }
+
       const visaProduct = await this.visaProductRepo
         .createQueryBuilder('v')
         .where('LOWER(v.country) = LOWER(:destination)', { destination })
@@ -158,13 +165,18 @@ export class NationalitiesService {
 
       if (visaProduct) {
         products.push({
-          productName: visaProduct.productName,
+          id: visaProduct.id, 
+          productName: np.productName,
           duration: visaProduct.duration,
           validity: visaProduct.validity,
-          govtFee: visaProduct.govtFee,
-          serviceFee: visaProduct.serviceFee,
-          totalAmount: visaProduct.totalAmount,
+          entryType: visaProduct.entryType,
+          visaType: `${visaProduct.validity}-${visaProduct.entryType}`, 
+          govtFee: np.govtFee !== null && np.govtFee !== undefined ? np.govtFee : visaProduct.govtFee,
+          serviceFee: np.serviceFee !== null && np.serviceFee !== undefined ? np.serviceFee : visaProduct.serviceFee,
+          totalAmount: np.totalAmount !== null && np.totalAmount !== undefined ? np.totalAmount : visaProduct.totalAmount,
         });
+        
+        processedProducts.add(np.productName.toLowerCase());
       }
     }
 

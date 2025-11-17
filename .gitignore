@@ -20,6 +20,8 @@
 /storage/*.key
 /storage/pail
 /vendor
+/uploads
+
 Homestead.json
 Homestead.yaml
 Thumbs.db
@@ -162,3 +164,5 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+
