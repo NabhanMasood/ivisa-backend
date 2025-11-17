@@ -41,10 +41,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sharp": "^0.34.5",
-<<<<<<< HEAD
     "stripe": "^19.3.1",
-=======
->>>>>>> origin/main
     "typeorm": "^0.3.27"
   },
   "devDependencies": {
@@ -60,10 +57,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^22.10.7",
-<<<<<<< HEAD
     "@types/stripe": "^8.0.416",
-=======
->>>>>>> origin/main
     "@types/supertest": "^6.0.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",

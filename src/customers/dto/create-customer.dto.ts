@@ -1,9 +1,4 @@
-<<<<<<< HEAD
 import { IsNotEmpty, IsString, IsEmail, IsOptional, IsDateString, IsBoolean } from 'class-validator';
-=======
-import { IsNotEmpty, IsString, IsEmail } from 'class-validator';
->>>>>>> origin/main
-
 export class CreateCustomerDto {
   @IsString()
   @IsNotEmpty({ message: 'Full name is required' })
@@ -12,8 +7,6 @@ export class CreateCustomerDto {
   @IsEmail()
   @IsNotEmpty({ message: 'Email is required' })
   email: string;
-
-<<<<<<< HEAD
   @IsString()
   @IsNotEmpty({ message: 'Residence country is required' })
   residenceCountry: string;
@@ -53,11 +46,5 @@ export class CreateCustomerDto {
   @IsBoolean()
   @IsOptional()
   hasSchengenVisa?: boolean;
-=======
-
-  @IsString()
-  @IsNotEmpty({ message: 'Residence country is required' })
-  residenceCountry: string;
->>>>>>> origin/main
 }
 

@@ -11,11 +11,7 @@ export class PaymentIntentDto {
 
   @IsString()
   @IsOptional()
-<<<<<<< HEAD
   currency?: string; // Default: USD
-=======
-  currency?: string; // Default: PKR
->>>>>>> origin/main
 
   @IsString()
   @IsOptional()
