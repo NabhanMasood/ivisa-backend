@@ -25,19 +25,42 @@ import { CardInfoModule } from './card-info/card-info.module';
     }),
 
     // Database config
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.PGHOST || 'localhost',
-      port: process.env.PGPORT ? parseInt(process.env.PGPORT, 10) : 5432,
-      username: process.env.PGUSER || 'Asad',
-      password: process.env.PGPASSWORD || '1234',
-      database: process.env.PGDATABASE || 'ivisa123_backend_db',
-      ssl:
-        process.env.PGSSLMODE === 'require'
-          ? { rejectUnauthorized: false }
-          : false,
-      autoLoadEntities: true,
-      synchronize: true,
+    TypeOrmModule.forRootAsync({
+      useFactory: () => {
+        // Parse DATABASE_URL if provided (Railway, Heroku, etc.)
+        if (process.env.DATABASE_URL) {
+          const url = new URL(process.env.DATABASE_URL);
+          return {
+            type: 'postgres',
+            host: url.hostname,
+            port: parseInt(url.port, 10),
+            username: url.username,
+            password: url.password,
+            database: url.pathname.slice(1), // Remove leading '/'
+            ssl: process.env.NODE_ENV === 'production' 
+              ? { rejectUnauthorized: false }
+              : false,
+            autoLoadEntities: true,
+            synchronize: true,
+          };
+        }
+        
+        // Fall back to individual environment variables
+        return {
+          type: 'postgres',
+          host: process.env.PGHOST || 'localhost',
+          port: process.env.PGPORT ? parseInt(process.env.PGPORT, 10) : 5432,
+          username: process.env.PGUSER || 'Asad',
+          password: process.env.PGPASSWORD || '1234',
+          database: process.env.PGDATABASE || 'ivisa123_backend_db',
+          ssl:
+            process.env.PGSSLMODE === 'require'
+              ? { rejectUnauthorized: false }
+              : false,
+          autoLoadEntities: true,
+          synchronize: true,
+        };
+      },
     }),
 
     AuthModule,
