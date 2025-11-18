@@ -22,6 +22,7 @@ import { CountriesService } from './countries.service';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
 import * as fs from 'fs';
+import { memoryStorage } from 'multer';
 
 @Controller('countries')
 export class CountriesController {
@@ -30,16 +31,17 @@ export class CountriesController {
   @Post()
   @UseInterceptors(
     FileInterceptor('logo', {
-      storage: diskStorage({
-        destination: '/tmp/uploads/countries',
-        filename: (req, file, cb) => {
-          const randomName = Array(32)
-            .fill(null)
-            .map(() => Math.round(Math.random() * 16).toString(16))
-            .join('');
-          cb(null, `${randomName}${extname(file.originalname)}`);
-        },
-      }),
+      // storage: diskStorage({
+      //   destination: '/tmp/uploads/countries',
+      //   filename: (req, file, cb) => {
+      //     const randomName = Array(32)
+      //       .fill(null)
+      //       .map(() => Math.round(Math.random() * 16).toString(16))
+      //       .join('');
+      //     cb(null, `${randomName}${extname(file.originalname)}`);
+      //   },
+      // }),
+      storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
           return cb(
@@ -140,16 +142,17 @@ export class CountriesController {
   @Patch(':id')
   @UseInterceptors(
     FileInterceptor('logo', {
-      storage: diskStorage({
-        destination: './tmp/uploads/countries',
-        filename: (req, file, cb) => {
-          const randomName = Array(32)
-            .fill(null)
-            .map(() => Math.round(Math.random() * 16).toString(16))
-            .join('');
-          cb(null, `${randomName}${extname(file.originalname)}`);
-        },
-      }),
+      // storage: diskStorage({
+      //   destination: './tmp/uploads/countries',
+      //   filename: (req, file, cb) => {
+      //     const randomName = Array(32)
+      //       .fill(null)
+      //       .map(() => Math.round(Math.random() * 16).toString(16))
+      //       .join('');
+      //     cb(null, `${randomName}${extname(file.originalname)}`);
+      //   },
+      // }),
+      storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
           return cb(

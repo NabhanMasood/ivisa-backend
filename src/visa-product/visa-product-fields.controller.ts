@@ -15,6 +15,7 @@ import {
   } from '@nestjs/common';
   import { FileInterceptor } from '@nestjs/platform-express';
   import { diskStorage } from 'multer';
+  import { memoryStorage } from 'multer';
   import { extname } from 'path';
   import { VisaProductFieldsService } from './visa-product-fields.service';
   import { CreateVisaProductFieldDto } from './dto/create-visa-product-field.dto';
@@ -85,16 +86,17 @@ import {
     @Post('upload')
     @UseInterceptors(
       FileInterceptor('file', {
-        storage: diskStorage({
-          destination: './tmp/uploads/visa-applications',
-          filename: (req, file, cb) => {
-            const randomName = Array(32)
-              .fill(null)
-              .map(() => Math.round(Math.random() * 16).toString(16))
-              .join('');
-            cb(null, `${randomName}${extname(file.originalname)}`);
-          },
-        }),
+        // storage: diskStorage({
+        //   destination: './tmp/uploads/visa-applications',
+        //   filename: (req, file, cb) => {
+        //     const randomName = Array(32)
+        //       .fill(null)
+        //       .map(() => Math.round(Math.random() * 16).toString(16))
+        //       .join('');
+        //     cb(null, `${randomName}${extname(file.originalname)}`);
+        //   },
+        // }),
+        storage: memoryStorage(),
         limits: {
           fileSize: 10 * 1024 * 1024, // 10MB default limit
         },
