@@ -46,7 +46,7 @@ async function bootstrap() {
     }),
   );
 
-  // Seed admins with error handling
+  // Seed admins with error handlingg
   try {
     const dataSource = app.get(DataSource);
     await seedAdmins(dataSource);
