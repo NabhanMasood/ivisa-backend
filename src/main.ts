@@ -30,6 +30,12 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
+  // Add request logging middleware
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    next();
+  });
+
   // Enable global validation
   app.useGlobalPipes(
     new ValidationPipe({
@@ -44,12 +50,20 @@ async function bootstrap() {
     prefix: '/uploads/',
   });
 
-  const dataSource = app.get(DataSource);
+  // Seed admins with error handling
+  try {
+    const dataSource = app.get(DataSource);
+    await seedAdmins(dataSource);
+  } catch (error) {
+    console.error('Error seeding admins (non-fatal):', error.message);
+    // Don't crash the app if seeding fails
+  }
 
   // Use PORT from environment or fallback to 5000
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
-  await app.listen(port);
-  console.log(`Server running on http://localhost:${port}`);
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8000;
+  // CRITICAL: Listen on 0.0.0.0, not localhost, so Railway can connect
+  await app.listen(port, '0.0.0.0');
+  console.log(`✅ Server running on http://0.0.0.0:${port} (accessible from Railway)`);
 }
 
 bootstrap().catch((error) => {
