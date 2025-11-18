@@ -31,7 +31,7 @@ export class CountriesController {
   @UseInterceptors(
     FileInterceptor('logo', {
       storage: diskStorage({
-        destination: './uploads/countries',
+        destination: '/tmp/uploads/countries',
         filename: (req, file, cb) => {
           const randomName = Array(32)
             .fill(null)
@@ -141,7 +141,7 @@ export class CountriesController {
   @UseInterceptors(
     FileInterceptor('logo', {
       storage: diskStorage({
-        destination: './uploads/countries',
+        destination: './tmp/uploads/countries',
         filename: (req, file, cb) => {
           const randomName = Array(32)
             .fill(null)

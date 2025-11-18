@@ -86,7 +86,7 @@ import {
     @UseInterceptors(
       FileInterceptor('file', {
         storage: diskStorage({
-          destination: './uploads/visa-applications',
+          destination: './tmp/uploads/visa-applications',
           filename: (req, file, cb) => {
             const randomName = Array(32)
               .fill(null)
