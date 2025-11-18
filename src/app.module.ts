@@ -16,6 +16,7 @@ import { CouponsModule } from './coupons/coupons.module';
 import { ProcessingOptionsModule } from './processing-options/processing-options.module';
 import { StripeModule } from './stripe/stripe.module';
 import { CardInfoModule } from './card-info/card-info.module';
+
 @Module({
   imports: [
     // Load .env globally (MUST come before TypeOrmModule)
@@ -78,8 +79,7 @@ import { CardInfoModule } from './card-info/card-info.module';
     StripeModule,
     CardInfoModule,
     ProcessingOptionsModule,
-  ],
-  controllers: [AppController],
+  ], controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule { }

@@ -32,7 +32,7 @@ export class VisaApplicationsService {
     private travelerRepo: Repository<Traveler>,
     private couponsService: CouponsService,
     private cardInfoService: CardInfoService,
-  ) {}
+  ) { }
 
   /**
    * Normalize fieldResponses structure for backward compatibility
@@ -243,13 +243,13 @@ export class VisaApplicationsService {
         where: { id },
         relations: ['customer', 'visaProduct', 'travelers', 'payment'],
       });
-  
+
       if (!application) {
         throw new NotFoundException(
           `Visa application with ID ${id} not found`,
         );
       }
-  
+
       // Reconstruct traveler 1 (the customer) from customer data
       // Traveler 1 is stored in customer table, not in travelers table
       const customerTraveler = application.customer ? {
@@ -264,7 +264,7 @@ export class VisaApplicationsService {
         nationality: application.customer.nationality,
         hasSchengenVisa: application.customer.hasSchengenVisa,
       } : null;
-  
+
       // ✅ Format travelers WITH their fieldResponses
       const formattedTravelers = (application.travelers || []).map(traveler => ({
         id: traveler.id,
@@ -281,12 +281,12 @@ export class VisaApplicationsService {
         notes: traveler.notes,
         fieldResponses: traveler.fieldResponses || {},  // ✅ CRITICAL: Include fieldResponses
       }));
-  
+
       // Combine customer (traveler 1) with additional travelers
-      const allTravelers = customerTraveler 
+      const allTravelers = customerTraveler
         ? [customerTraveler, ...formattedTravelers]
         : formattedTravelers;
-  
+
       return {
         status: true,
         message: 'Visa application retrieved successfully',
@@ -325,14 +325,14 @@ export class VisaApplicationsService {
           approvedAt: application.approvedAt,
           rejectionReason: application.rejectionReason,
           notes: application.notes,
-  
+
           resubmissionRequests: application.resubmissionRequests || [],
 
 
           resubmissionTarget: application.resubmissionTarget || undefined,
           resubmissionTravelerId: application.resubmissionTravelerId || undefined,
           requestedFieldIds: application.requestedFieldIds || undefined,
-        
+
           travelers: allTravelers, // ✅ Now includes fieldResponses for each traveler
           payment: application.payment || null,
           fieldResponses: (() => {
@@ -340,10 +340,10 @@ export class VisaApplicationsService {
             const applicationResponses = this.normalizeApplicationFieldResponses(
               application.fieldResponses,
             );
-  
+
             // Get traveler-specific responses from Traveler entities
             const travelerResponsesMap = new Map<number, any[]>();
-            
+
             if (application.travelers && application.travelers.length > 0) {
               // Create field map for traveler responses (for consistency)
               const travelerFieldMap = new Map<number | string, any>();
@@ -353,7 +353,7 @@ export class VisaApplicationsService {
                   travelerFieldMap.set(String(f.id), f);
                 });
               }
-  
+
               for (const traveler of application.travelers) {
                 if (traveler.fieldResponses && Object.keys(traveler.fieldResponses).length > 0) {
                   const responses = Object.entries(traveler.fieldResponses).map(
@@ -361,16 +361,16 @@ export class VisaApplicationsService {
                       // Try to match field by both number and string
                       const fieldIdNum = parseInt(fieldIdKey, 10);
                       const field = travelerFieldMap.get(fieldIdNum) || travelerFieldMap.get(fieldIdKey);
-                      
+
                       return {
                         fieldId: isNaN(fieldIdNum) ? fieldIdKey : fieldIdNum,
                         field: field
                           ? {
-                              id: field.id,
-                              question: field.question,
-                              fieldType: field.fieldType,
-                              displayOrder: field.displayOrder || 0,
-                            }
+                            id: field.id,
+                            question: field.question,
+                            fieldType: field.fieldType,
+                            displayOrder: field.displayOrder || 0,
+                          }
                           : null,
                         value: response.value,
                         filePath: response.filePath,
@@ -389,31 +389,31 @@ export class VisaApplicationsService {
                 }
               }
             }
-  
+
             // IMPORTANT: Iterate over FIELDS first (in displayOrder), then find responses
             // This ensures correct ordering even if responses were stored with wrong keys
             const fields = (application.visaProduct?.fields || []).filter(
               (f: any) => f.isActive !== false,
             ).sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0));
-  
+
             // Create response map for quick lookup
             const responseMap = new Map<string | number, any>();
             Object.entries(applicationResponses).forEach(([key, value]) => {
               responseMap.set(key, value);
               responseMap.set(parseInt(key, 10), value); // Also support number keys
             });
-  
+
             // Check if responses are using sequential indices (1, 2, 3, ...) instead of field IDs
             const responseKeys = Object.keys(applicationResponses);
             const areSequentialIndices = responseKeys.every((key, index) => {
               const numKey = parseInt(key, 10);
               return !isNaN(numKey) && numKey === index + 1;
             }) && responseKeys.length > 0;
-  
+
             // Build application responses array by iterating over fields
             const applicationResponsesArray = fields.map((field: any, index: number) => {
               let response: any = null;
-              
+
               if (areSequentialIndices) {
                 // WORKAROUND: If responses are stored with sequential indices, match by position
                 // Response "1" maps to fields[0], "2" to fields[1], etc.
@@ -423,7 +423,7 @@ export class VisaApplicationsService {
                 // Normal case: Try to find response by field.id (both string and number)
                 response = responseMap.get(field.id) || responseMap.get(String(field.id));
               }
-              
+
               if (response) {
                 return {
                   fieldId: field.id, // Always return actual field.id, not the stored key
@@ -442,7 +442,7 @@ export class VisaApplicationsService {
               }
               return null;
             }).filter((r: any) => r !== null); // Remove fields without responses
-  
+
             return {
               application: applicationResponsesArray,
               travelers: Array.from(travelerResponsesMap.entries()).map(
@@ -548,13 +548,13 @@ export class VisaApplicationsService {
       const application = await this.applicationRepo.findOne({
         where: { id },
       });
-  
+
       if (!application) {
         throw new NotFoundException(
           `Visa application with ID ${id} not found`,
         );
       }
-  
+
       // Validate status transition
       const currentStatus = application.status;
       const allowedTransitions: Record<string, string[]> = {
@@ -568,9 +568,9 @@ export class VisaApplicationsService {
         'cancelled': [], // Final state
         'completed': [], // Final state
       };
-  
+
       const allowedNextStatuses = allowedTransitions[currentStatus] || [];
-      
+
       // ✅ ADD THIS: Allow idempotent updates (same status)
       if (currentStatus === newStatus) {
         return {
@@ -584,12 +584,12 @@ export class VisaApplicationsService {
           },
         };
       }
-      
+
       // Validate the transition is allowed
       if (allowedNextStatuses.includes(newStatus)) {
         application.status = newStatus;
         const result = await this.applicationRepo.save(application);
-  
+
         return {
           status: true,
           message: 'Application status updated successfully',
@@ -835,22 +835,22 @@ export class VisaApplicationsService {
       const query = this.applicationRepo
         .createQueryBuilder('app')
         .leftJoinAndSelect('app.visaProduct', 'visaProduct')
-        .leftJoinAndSelect('app.customer', 'customer')  
-        .leftJoinAndSelect('app.travelers', 'travelers') 
+        .leftJoinAndSelect('app.customer', 'customer')
+        .leftJoinAndSelect('app.travelers', 'travelers')
         .leftJoinAndSelect('app.payment', 'payment')
         .where('app.customerId = :customerId', { customerId });
-  
+
       if (search) {
         query.andWhere(
           '(app.applicationNumber ILIKE :search OR app.destinationCountry ILIKE :search)',
           { search: `%${search}%` },
         );
       }
-  
+
       const applications = await query
         .orderBy('app.createdAt', 'DESC')
         .getMany();
-  
+
       // ✅ Format applications with reconstructed traveler data (like findOne does)
       const formattedApplications = applications.map((app) => {
         // Reconstruct traveler 1 (the customer) from customer data
@@ -866,12 +866,12 @@ export class VisaApplicationsService {
           nationality: app.customer.nationality,
           hasSchengenVisa: app.customer.hasSchengenVisa,
         } : null;
-  
+
         // Combine customer (traveler 1) with additional travelers
-        const allTravelers = customerTraveler 
+        const allTravelers = customerTraveler
           ? [customerTraveler, ...(app.travelers || [])]
           : (app.travelers || []);
-  
+
         return {
           id: app.id,
           applicationNumber: app.applicationNumber,
@@ -914,7 +914,7 @@ export class VisaApplicationsService {
           resubmissionTarget: app.resubmissionTarget || undefined,
           resubmissionTravelerId: app.resubmissionTravelerId || undefined,
           requestedFieldIds: app.requestedFieldIds || undefined,
-  
+
           travelers: allTravelers, // ✅ Traveler 1 (customer) + additional travelers
           payment: app.payment || null,
           fieldResponses: (() => {
@@ -925,7 +925,7 @@ export class VisaApplicationsService {
 
             // Get traveler-specific responses from Traveler entities
             const travelerResponsesMap = new Map<number, any[]>();
-            
+
             if (app.travelers && app.travelers.length > 0) {
               for (const traveler of app.travelers) {
                 if (traveler.fieldResponses && Object.keys(traveler.fieldResponses).length > 0) {
@@ -943,16 +943,16 @@ export class VisaApplicationsService {
                       // Try to match field by both number and string
                       const fieldIdNum = parseInt(fieldIdKey, 10);
                       const field = travelerFieldMap.get(fieldIdNum) || travelerFieldMap.get(fieldIdKey);
-                      
+
                       return {
                         fieldId: isNaN(fieldIdNum) ? fieldIdKey : fieldIdNum,
                         field: field
                           ? {
-                              id: field.id,
-                              question: field.question,
-                              fieldType: field.fieldType,
-                              displayOrder: field.displayOrder || 0,
-                            }
+                            id: field.id,
+                            question: field.question,
+                            fieldType: field.fieldType,
+                            displayOrder: field.displayOrder || 0,
+                          }
                           : null,
                         value: response.value,
                         filePath: response.filePath,
@@ -997,7 +997,7 @@ export class VisaApplicationsService {
             // Build application responses array by iterating over fields
             const applicationResponsesArray = fields.map((field: any, index: number) => {
               let response: any = null;
-              
+
               if (areSequentialIndices) {
                 // WORKAROUND: If responses are stored with sequential indices, match by position
                 // Response "1" maps to fields[0], "2" to fields[1], etc.
@@ -1007,7 +1007,7 @@ export class VisaApplicationsService {
                 // Normal case: Try to find response by field.id (both string and number)
                 response = responseMap.get(field.id) || responseMap.get(String(field.id));
               }
-              
+
               if (response) {
                 return {
                   fieldId: field.id, // Always return actual field.id, not the stored key
@@ -1041,7 +1041,7 @@ export class VisaApplicationsService {
           updatedAt: app.updatedAt,
         };
       });
-  
+
       return {
         status: true,
         message: 'Customer applications retrieved successfully',
@@ -1164,9 +1164,11 @@ export class VisaApplicationsService {
       // 5. Generate application number
       const applicationNumber = await this.generateApplicationNumber();
 
-      // 6. Calculate base fees (for reference/validation)
-      const governmentFee = visaProduct.govtFee * submitDto.numberOfTravelers;
-      const serviceFee = visaProduct.serviceFee * submitDto.numberOfTravelers;
+      // 6. Use fees from DTO (frontend calculated these, possibly with nationality-specific pricing)
+      // The frontend sends govtFee and serviceFee which may already be multiplied by numberOfTravelers
+      // and may include nationality-specific adjustments
+      const governmentFee = submitDto.govtFee;
+      const serviceFee = submitDto.serviceFee;
       const baseTotalAmount = governmentFee + serviceFee + submitDto.processingFee;
 
       // 7. Use the totalAmount from payload (already includes discount if applied)
@@ -1403,72 +1405,153 @@ export class VisaApplicationsService {
    * Admin: request resubmission from customer with a note
    * Moves status back to "Additional Info required" and stores the note
    */
-/**
- * Admin: request resubmission from customer with a note
- * Moves status back to "resubmission" and stores the note
- */
-/**
- * Request resubmission (supports both Option A and Option B)
- * @param applicationId - Application ID
- * @param requests - Array of resubmission requests (can be single or multiple)
- */
-async requestResubmission(
-  applicationId: number,
-  requests: Array<{
-    target: 'application' | 'traveler';
-    travelerId?: number;
-    fieldIds: number[];
-    note?: string;
-  }>
-) {
-  try {
+  /**
+   * Admin: request resubmission from customer with a note
+   * Moves status back to "resubmission" and stores the note
+   */
+  /**
+   * Request resubmission (supports both Option A and Option B)
+   * @param applicationId - Application ID
+   * @param requests - Array of resubmission requests (can be single or multiple)
+   */
+  async requestResubmission(
+    applicationId: number,
+    requests: Array<{
+      target: 'application' | 'traveler';
+      travelerId?: number;
+      fieldIds: number[];
+      note?: string;
+    }>
+  ) {
+    try {
+      const application = await this.applicationRepo.findOne({
+        where: { id: applicationId },
+        relations: ['travelers'],
+      });
+
+      if (!application) {
+        throw new NotFoundException(
+          `Application with ID ${applicationId} not found`,
+        );
+      }
+
+      // Validate travelers exist
+      for (const request of requests) {
+        if (request.target === 'traveler' && request.travelerId) {
+          const traveler = application.travelers?.find(
+            (t) => t.id === request.travelerId
+          );
+          if (!traveler) {
+            throw new NotFoundException(
+              `Traveler with ID ${request.travelerId} not found for this application`
+            );
+          }
+        }
+      }
+
+      // Generate unique IDs for each request
+      const resubmissionRequests: ResubmissionRequest[] = requests.map((req) => ({
+        id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        target: req.target,
+        travelerId: req.travelerId || null,
+        fieldIds: req.fieldIds,
+        note: req.note || null,
+        requestedAt: new Date().toISOString(),
+        fulfilledAt: null,
+      }));
+
+      // Store requests
+      application.resubmissionRequests = resubmissionRequests;
+      application.status = 'resubmission';
+
+      // ✅ BACKWARD COMPATIBILITY: Also set old fields for Option A (single request)
+      if (requests.length === 1) {
+        application.resubmissionTarget = requests[0].target;
+        application.resubmissionTravelerId = requests[0].travelerId || null;
+        application.requestedFieldIds = requests[0].fieldIds;
+      } else {
+        // Multiple requests - clear old fields
+        application.resubmissionTarget = null;
+        application.resubmissionTravelerId = null;
+        application.requestedFieldIds = null;
+      }
+
+      await this.applicationRepo.save(application);
+
+      return {
+        status: true,
+        message: 'Resubmission requested successfully',
+        data: {
+          applicationId: application.id,
+          requests: resubmissionRequests,
+        },
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error.message || 'Error requesting resubmission'
+      );
+    }
+  }
+
+  /**
+   * Get active (unfulfilled) resubmission requests for an application
+   */
+  async getActiveResubmissionRequests(applicationId: number) {
     const application = await this.applicationRepo.findOne({
       where: { id: applicationId },
-      relations: ['travelers'],
     });
 
     if (!application) {
       throw new NotFoundException(
-        `Application with ID ${applicationId} not found`,
+        `Application with ID ${applicationId} not found`
       );
     }
 
-    // Validate travelers exist
-    for (const request of requests) {
-      if (request.target === 'traveler' && request.travelerId) {
-        const traveler = application.travelers?.find(
-          (t) => t.id === request.travelerId
-        );
-        if (!traveler) {
-          throw new NotFoundException(
-            `Traveler with ID ${request.travelerId} not found for this application`
-          );
-        }
-      }
+    const activeRequests =
+      application.resubmissionRequests?.filter(
+        (req) => !req.fulfilledAt
+      ) || [];
+
+    return {
+      status: true,
+      data: activeRequests,
+    };
+  }
+
+  /**
+   * Mark a resubmission request as fulfilled
+   */
+  async markRequestFulfilled(applicationId: number, requestId: string) {
+    const application = await this.applicationRepo.findOne({
+      where: { id: applicationId },
+    });
+
+    if (!application || !application.resubmissionRequests) {
+      throw new NotFoundException('Resubmission request not found');
     }
 
-    // Generate unique IDs for each request
-    const resubmissionRequests: ResubmissionRequest[] = requests.map((req) => ({
-      id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      target: req.target,
-      travelerId: req.travelerId || null,
-      fieldIds: req.fieldIds,
-      note: req.note || null,
-      requestedAt: new Date().toISOString(),
-      fulfilledAt: null,
-    }));
+    const request = application.resubmissionRequests.find(
+      (req) => req.id === requestId
+    );
 
-    // Store requests
-    application.resubmissionRequests = resubmissionRequests;
-    application.status = 'resubmission';
+    if (!request) {
+      throw new NotFoundException('Resubmission request not found');
+    }
 
-    // ✅ BACKWARD COMPATIBILITY: Also set old fields for Option A (single request)
-    if (requests.length === 1) {
-      application.resubmissionTarget = requests[0].target;
-      application.resubmissionTravelerId = requests[0].travelerId || null;
-      application.requestedFieldIds = requests[0].fieldIds;
-    } else {
-      // Multiple requests - clear old fields
+    request.fulfilledAt = new Date().toISOString();
+
+    // Check if all requests are fulfilled
+    const allFulfilled = application.resubmissionRequests.every(
+      (req) => req.fulfilledAt
+    );
+
+    if (allFulfilled) {
+      application.status = 'processing';
+      application.resubmissionRequests = null;
+      // Clear backward compatibility fields
       application.resubmissionTarget = null;
       application.resubmissionTravelerId = null;
       application.requestedFieldIds = null;
@@ -1478,98 +1561,17 @@ async requestResubmission(
 
     return {
       status: true,
-      message: 'Resubmission requested successfully',
+      message: allFulfilled
+        ? 'All resubmissions fulfilled, status changed to processing'
+        : 'Request marked as fulfilled',
       data: {
-        applicationId: application.id,
-        requests: resubmissionRequests,
+        allFulfilled,
+        remainingRequests: application.resubmissionRequests?.filter(
+          (req) => !req.fulfilledAt
+        ).length || 0,
       },
     };
-  } catch (error) {
-    if (error instanceof NotFoundException) {
-      throw error;
-    }
-    throw new BadRequestException(
-      error.message || 'Error requesting resubmission'
-    );
   }
-}
-
-/**
- * Get active (unfulfilled) resubmission requests for an application
- */
-async getActiveResubmissionRequests(applicationId: number) {
-  const application = await this.applicationRepo.findOne({
-    where: { id: applicationId },
-  });
-
-  if (!application) {
-    throw new NotFoundException(
-      `Application with ID ${applicationId} not found`
-    );
-  }
-
-  const activeRequests =
-    application.resubmissionRequests?.filter(
-      (req) => !req.fulfilledAt
-    ) || [];
-
-  return {
-    status: true,
-    data: activeRequests,
-  };
-}
-
-/**
- * Mark a resubmission request as fulfilled
- */
-async markRequestFulfilled(applicationId: number, requestId: string) {
-  const application = await this.applicationRepo.findOne({
-    where: { id: applicationId },
-  });
-
-  if (!application || !application.resubmissionRequests) {
-    throw new NotFoundException('Resubmission request not found');
-  }
-
-  const request = application.resubmissionRequests.find(
-    (req) => req.id === requestId
-  );
-
-  if (!request) {
-    throw new NotFoundException('Resubmission request not found');
-  }
-
-  request.fulfilledAt = new Date().toISOString();
-
-  // Check if all requests are fulfilled
-  const allFulfilled = application.resubmissionRequests.every(
-    (req) => req.fulfilledAt
-  );
-
-  if (allFulfilled) {
-    application.status = 'processing';
-    application.resubmissionRequests = null;
-    // Clear backward compatibility fields
-    application.resubmissionTarget = null;
-    application.resubmissionTravelerId = null;
-    application.requestedFieldIds = null;
-  }
-
-  await this.applicationRepo.save(application);
-
-  return {
-    status: true,
-    message: allFulfilled
-      ? 'All resubmissions fulfilled, status changed to processing'
-      : 'Request marked as fulfilled',
-    data: {
-      allFulfilled,
-      remainingRequests: application.resubmissionRequests?.filter(
-        (req) => !req.fulfilledAt
-      ).length || 0,
-    },
-  };
-}
 
   /**
    * Add admin-only custom fields to an application
