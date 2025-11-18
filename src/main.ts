@@ -44,14 +44,7 @@ async function bootstrap() {
     prefix: '/uploads/',
   });
 
-  // Seed admins with error handling
-  try {
-    const dataSource = app.get(DataSource);
-    await seedAdmins(dataSource);
-  } catch (error) {
-    console.error('Error seeding admins:', error);
-    // Don't crash the app if seeding fails
-  }
+  const dataSource = app.get(DataSource);
 
   // Use PORT from environment or fallback to 5000
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
