@@ -16,6 +16,7 @@ import { CouponsModule } from './coupons/coupons.module';
 import { ProcessingOptionsModule } from './processing-options/processing-options.module';
 import { StripeModule } from './stripe/stripe.module';
 import { CardInfoModule } from './card-info/card-info.module';
+import { CommonModule } from './common/common.module';
 
 @Module({
   imports: [
@@ -24,6 +25,8 @@ import { CardInfoModule } from './card-info/card-info.module';
       isGlobal: true,
       envFilePath: '.env', // ensures it reads from your local .env
     }),
+
+    CommonModule,
 
     // Database config
     TypeOrmModule.forRootAsync({
@@ -47,7 +50,7 @@ import { CardInfoModule } from './card-info/card-info.module';
           console.log(`Connecting to database: ${url.hostname}:${url.port}/${url.pathname.slice(1)}`);
           return config;
         }
-        
+
         // Fall back to individual environment variables
         return {
           type: 'postgres',

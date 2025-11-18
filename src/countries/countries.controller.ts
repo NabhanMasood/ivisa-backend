@@ -1,13 +1,13 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
-  Query, 
-  BadRequestException, 
-  Param, 
-  Patch, 
-  Delete, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  BadRequestException,
+  Param,
+  Patch,
+  Delete,
   ParseIntPipe,
   UseInterceptors,
   UploadedFile,
@@ -15,32 +15,27 @@ import {
   HttpStatus
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import sharp from 'sharp'; // Changed from: import * as sharp from 'sharp'
+import { memoryStorage } from 'multer';
 import { CountriesService } from './countries.service';
 import { CreateCountryDto } from './dto/create-country.dto';
 import { UpdateCountryDto } from './dto/update-country.dto';
-import * as fs from 'fs';
-import { memoryStorage } from 'multer';
+import { CloudinaryService } from '../common/cloudinary.service';
+import sharp from 'sharp';
 
 @Controller('countries')
 export class CountriesController {
-  constructor(private readonly countriesService: CountriesService) {}
+  constructor(
+    private readonly countriesService: CountriesService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) { }
 
-  @Post()
+  /**
+   * Upload logo endpoint - separate from create/update
+   * Backend uploads to Cloudinary and returns the URL
+   */
+  @Post('upload')
   @UseInterceptors(
     FileInterceptor('logo', {
-      // storage: diskStorage({
-      //   destination: '/tmp/uploads/countries',
-      //   filename: (req, file, cb) => {
-      //     const randomName = Array(32)
-      //       .fill(null)
-      //       .map(() => Math.round(Math.random() * 16).toString(16))
-      //       .join('');
-      //     cb(null, `${randomName}${extname(file.originalname)}`);
-      //   },
-      // }),
       storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
@@ -59,37 +54,55 @@ export class CountriesController {
       },
     }),
   )
-  async create(
-    @Body() createDto: CreateCountryDto,
-    @UploadedFile() file: Express.Multer.File,
-  ) {
+  async uploadLogo(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
     try {
-      let logoUrl: string | undefined = undefined; // Fixed type
+      // Resize image to 32x32 using sharp
+      const resizedBuffer = await sharp(file.buffer)
+        .resize(32, 32, {
+          fit: 'cover',
+          position: 'center',
+        })
+        .toBuffer();
 
-      if (file) {
-        // Resize image to 32x32
-        const resizedImagePath = file.path.replace(
-          extname(file.path),
-          '-32x32' + extname(file.path),
-        );
-        
-        await sharp(file.path)
-          .resize(32, 32, {
-            fit: 'cover',
-            position: 'center',
-          })
-          .toFile(resizedImagePath);
+      // Create a new file object with resized buffer
+      const resizedFile: Express.Multer.File = {
+        ...file,
+        buffer: resizedBuffer,
+      };
 
-        // Delete original file
-        fs.unlinkSync(file.path);
+      // Upload to Cloudinary
+      const uploadResult = await this.cloudinaryService.uploadImageWithResize(
+        resizedFile,
+        'ivisa123/countries',
+        32,
+        32,
+      );
 
-        logoUrl = `/uploads/countries/${resizedImagePath.split('/').pop()}`; // Fixed type
-      }
-
-      const country = await this.countriesService.create({
-        ...createDto,
-        logoUrl, // Now correctly typed as string | undefined
+      return {
+        status: true,
+        message: 'Logo uploaded successfully',
+        data: {
+          logoUrl: uploadResult.url,
+          fileName: file.originalname,
+          fileSize: uploadResult.bytes,
+        },
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to upload logo',
       });
+    }
+  }
+
+  @Post()
+  async create(@Body() createDto: CreateCountryDto) {
+    try {
+      const country = await this.countriesService.create(createDto);
 
       return {
         status: true,
@@ -140,66 +153,12 @@ export class CountriesController {
   }
 
   @Patch(':id')
-  @UseInterceptors(
-    FileInterceptor('logo', {
-      // storage: diskStorage({
-      //   destination: './tmp/uploads/countries',
-      //   filename: (req, file, cb) => {
-      //     const randomName = Array(32)
-      //       .fill(null)
-      //       .map(() => Math.round(Math.random() * 16).toString(16))
-      //       .join('');
-      //     cb(null, `${randomName}${extname(file.originalname)}`);
-      //   },
-      // }),
-      storage: memoryStorage(),
-      fileFilter: (req, file, cb) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-          return cb(
-            new HttpException(
-              'Only image files are allowed!',
-              HttpStatus.BAD_REQUEST,
-            ),
-            false,
-          );
-        }
-        cb(null, true);
-      },
-      limits: {
-        fileSize: 1024 * 1024,
-      },
-    }),
-  )
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateDto: UpdateCountryDto,
-    @UploadedFile() file: Express.Multer.File,
   ) {
     try {
-      let logoUrl = updateDto.logoUrl;
-
-      if (file) {
-        const resizedImagePath = file.path.replace(
-          extname(file.path),
-          '-32x32' + extname(file.path),
-        );
-        
-        await sharp(file.path)
-          .resize(32, 32, {
-            fit: 'cover',
-            position: 'center',
-          })
-          .toFile(resizedImagePath);
-
-        fs.unlinkSync(file.path);
-
-        logoUrl = `/uploads/countries/${resizedImagePath.split('/').pop()}`;
-      }
-
-      const country = await this.countriesService.update(id, {
-        ...updateDto,
-        logoUrl,
-      });
+      const country = await this.countriesService.update(id, updateDto);
 
       return {
         status: true,

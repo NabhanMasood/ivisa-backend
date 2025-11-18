@@ -5,7 +5,6 @@ import { DataSource } from 'typeorm';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
-import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -15,9 +14,10 @@ async function bootstrap() {
     'https://ivisa123.vercel.app',
     'https://ivisa123-landing.vercel.app',
     'http://localhost:3000',
+    'http://localhost:3001',
     'http://localhost:5173',
   ];
-  
+
   if (process.env.FRONTEND_URL) {
     allowedOrigins.push(process.env.FRONTEND_URL);
   }
@@ -45,11 +45,6 @@ async function bootstrap() {
       transform: true,
     }),
   );
-
-  // Serve static files from uploads directoryy
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
-    prefix: '/uploads/',
-  });
 
   // Seed admins with error handling
   try {
