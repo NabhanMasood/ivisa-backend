@@ -12,6 +12,7 @@ async function bootstrap() {
 
   // Configure CORS with explicit origins
   const allowedOrigins: string[] = [
+    'https://ivisa123.vercel.app',
     'https://ivisa123-landing.vercel.app',
     'http://localhost:3000',
     'http://localhost:5173',
