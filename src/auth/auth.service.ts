@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -7,6 +7,10 @@ import { Admin } from './entities/admin.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { CreateSubadminDto } from './dto/create-subadmin.dto';
+import { UpdateSubadminDto } from './dto/update-subadmin.dto';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -15,15 +19,17 @@ export class AuthService {
     private readonly adminRepo: Repository<Admin>,
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
-  ) {}
+    private emailService: EmailService,
+    private configService: ConfigService,
+  ) { }
 
   // ==================== CUSTOMER AUTH ====================
   async customerRegister(dto: RegisterDto) {
     const { fullName, email, password } = dto;
 
     // Check if customer already exists
-    const existingCustomer = await this.customerRepo.findOne({ 
-      where: { email } 
+    const existingCustomer = await this.customerRepo.findOne({
+      where: { email }
     });
 
     if (existingCustomer) {
@@ -37,12 +43,12 @@ export class AuthService {
       existingCustomer.fullname = fullName;
       existingCustomer.status = 'Active';
       existingCustomer.role = 'customer';
-      
+
       const updatedCustomer = await this.customerRepo.save(existingCustomer);
 
       const token = jwt.sign(
-        { 
-          id: updatedCustomer.id, 
+        {
+          id: updatedCustomer.id,
           email: updatedCustomer.email,
           role: 'customer',
           type: 'customer'
@@ -53,7 +59,7 @@ export class AuthService {
 
       const { password: _, ...customerWithoutPassword } = updatedCustomer;
 
-      return { 
+      return {
         status: true,
         message: 'Account completed successfully!',
         token,
@@ -63,7 +69,7 @@ export class AuthService {
 
     // Create new customer
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     const customer = this.customerRepo.create({
       fullname: fullName,
       email,
@@ -75,8 +81,8 @@ export class AuthService {
     const savedCustomer = await this.customerRepo.save(customer);
 
     const token = jwt.sign(
-      { 
-        id: savedCustomer.id, 
+      {
+        id: savedCustomer.id,
         email: savedCustomer.email,
         role: 'customer',
         type: 'customer'
@@ -87,7 +93,7 @@ export class AuthService {
 
     const { password: _, ...customerWithoutPassword } = savedCustomer;
 
-    return { 
+    return {
       status: true,
       message: 'Account created successfully',
       token,
@@ -97,9 +103,9 @@ export class AuthService {
 
   async customerLogin(dto: LoginDto) {
     const { email, password } = dto;
-  
+
     const customer = await this.customerRepo.findOne({ where: { email } });
-    
+
     if (!customer) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -107,15 +113,15 @@ export class AuthService {
     if (!customer.password) {
       throw new UnauthorizedException('Please complete your account registration first.');
     }
-  
+
     const isPasswordValid = await bcrypt.compare(password, customer.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
-  
+
     const token = jwt.sign(
-      { 
-        id: customer.id, 
+      {
+        id: customer.id,
         email: customer.email,
         role: 'customer',
         type: 'customer'
@@ -123,13 +129,13 @@ export class AuthService {
       process.env.JWT_SECRET || 'SECRET_KEY',
       { expiresIn: '7d' },
     );
-  
+
     const { password: _, ...customerWithoutPassword } = customer;
-  
-    return { 
+
+    return {
       status: true,
-      message: 'Login successful', 
-      token, 
+      message: 'Login successful',
+      token,
       user: customerWithoutPassword
     };
   }
@@ -137,7 +143,7 @@ export class AuthService {
   // ==================== PASSWORD MANAGEMENT ====================
   async changePassword(customerId: number, currentPassword: string, newPassword: string) {
     const customer = await this.customerRepo.findOne({ where: { id: customerId } });
-    
+
     if (!customer) {
       throw new UnauthorizedException('Customer not found');
     }
@@ -155,7 +161,7 @@ export class AuthService {
     // Hash new password
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
     customer.password = hashedNewPassword;
-    
+
     await this.customerRepo.save(customer);
 
     return {
@@ -167,7 +173,7 @@ export class AuthService {
   // ==================== EMAIL MANAGEMENT ====================
   async changeEmail(customerId: number, newEmail: string, password: string) {
     const customer = await this.customerRepo.findOne({ where: { id: customerId } });
-    
+
     if (!customer) {
       throw new UnauthorizedException('Customer not found');
     }
@@ -213,46 +219,191 @@ export class AuthService {
     if (existing) throw new BadRequestException('Email already exists');
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const admin = this.adminRepo.create({ 
-      fullName, 
-      email, 
-      password: hashedPassword 
+    const admin = this.adminRepo.create({
+      fullName,
+      email,
+      password: hashedPassword,
+      role: 'superadmin' // Default role for admin registration
     });
     await this.adminRepo.save(admin);
 
-    return { 
+    return {
       status: true,
-      message: 'Admin registered successfully', 
-      admin 
+      message: 'Admin registered successfully',
+      admin
+    };
+  }
+
+  async getAdminProfile(adminId: number) {
+    const admin = await this.adminRepo.findOne({
+      where: { id: adminId },
+      select: ['id', 'fullName', 'email', 'role', 'permissions', 'createdAt', 'updatedAt'],
+    });
+
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    return {
+      status: true,
+      admin,
     };
   }
 
   async adminLogin(dto: LoginDto) {
     const { email, password } = dto;
-  
+
     const admin = await this.adminRepo.findOne({ where: { email } });
     if (!admin) throw new UnauthorizedException('Invalid credentials');
-  
+
     const isPasswordValid = await bcrypt.compare(password, admin.password);
     if (!isPasswordValid) throw new UnauthorizedException('Invalid credentials');
-  
+
     const token = jwt.sign(
-      { 
-        id: admin.id, 
+      {
+        id: admin.id,
         email: admin.email,
-        type: 'admin'
+        type: 'admin',
+        role: admin.role,
+        permissions: admin.permissions
       },
       process.env.JWT_SECRET || 'SECRET_KEY',
       { expiresIn: '7d' },
     );
-  
+
     const { password: _, ...adminWithoutPassword } = admin;
-  
-    return { 
+
+    return {
       status: true,
-      message: 'Login successful', 
-      token, 
+      message: 'Login successful',
+      token,
       admin: adminWithoutPassword
+    };
+  }
+
+  // ==================== SUB-ADMIN MANAGEMENT ====================
+  async createSubadmin(dto: CreateSubadminDto) {
+    const { email, password, permissions } = dto;
+
+    // Check if email already exists
+    const existing = await this.adminRepo.findOne({ where: { email } });
+    if (existing) {
+      throw new BadRequestException('Email already exists');
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create sub-admin
+    const subadmin = this.adminRepo.create({
+      fullName: email.split('@')[0], // Use email prefix as default name
+      email,
+      password: hashedPassword,
+      role: 'subadmin',
+      permissions,
+    });
+
+    const savedSubadmin = await this.adminRepo.save(subadmin);
+
+    // Send welcome email with credentials to the new subadmin
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const adminPanelUrl = `${frontendUrl}/admin/login`;
+
+    // Send email asynchronously (don't wait for it to complete)
+    this.emailService.sendSubadminWelcomeEmail(
+      email,
+      email,
+      password, // Send the plain password (they'll need to change it)
+      adminPanelUrl,
+    ).catch(error => {
+      console.error('Failed to send subadmin welcome email:', error);
+    });
+
+    // Remove password from response
+    const { password: _, ...subadminWithoutPassword } = savedSubadmin;
+
+    return {
+      status: true,
+      message: 'Sub-admin created successfully',
+      subadmin: subadminWithoutPassword,
+    };
+  }
+
+  async getAllSubadmins() {
+    const subadmins = await this.adminRepo.find({
+      where: { role: 'subadmin' },
+      select: ['id', 'fullName', 'email', 'role', 'permissions', 'createdAt', 'updatedAt'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      status: true,
+      subadmins,
+    };
+  }
+
+  async getSubadminById(id: number) {
+    const subadmin = await this.adminRepo.findOne({
+      where: { id, role: 'subadmin' },
+      select: ['id', 'fullName', 'email', 'role', 'permissions', 'createdAt', 'updatedAt'],
+    });
+
+    if (!subadmin) {
+      throw new NotFoundException('Sub-admin not found');
+    }
+
+    return {
+      status: true,
+      subadmin,
+    };
+  }
+
+  async updateSubadmin(id: number, dto: UpdateSubadminDto) {
+    const subadmin = await this.adminRepo.findOne({
+      where: { id, role: 'subadmin' },
+    });
+
+    if (!subadmin) {
+      throw new NotFoundException('Sub-admin not found');
+    }
+
+    // Update permissions if provided
+    if (dto.permissions) {
+      subadmin.permissions = dto.permissions;
+    }
+
+    // Update password if provided
+    if (dto.password) {
+      const hashedPassword = await bcrypt.hash(dto.password, 10);
+      subadmin.password = hashedPassword;
+    }
+
+    const updatedSubadmin = await this.adminRepo.save(subadmin);
+
+    // Remove password from response
+    const { password: _, ...subadminWithoutPassword } = updatedSubadmin;
+
+    return {
+      status: true,
+      message: 'Sub-admin updated successfully',
+      subadmin: subadminWithoutPassword,
+    };
+  }
+
+  async deleteSubadmin(id: number) {
+    const subadmin = await this.adminRepo.findOne({
+      where: { id, role: 'subadmin' },
+    });
+
+    if (!subadmin) {
+      throw new NotFoundException('Sub-admin not found');
+    }
+
+    await this.adminRepo.remove(subadmin);
+
+    return {
+      status: true,
+      message: 'Sub-admin deleted successfully',
     };
   }
 }

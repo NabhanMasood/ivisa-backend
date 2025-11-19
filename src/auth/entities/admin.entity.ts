@@ -1,5 +1,19 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
+export type AdminRole = 'superadmin' | 'subadmin';
+
+export interface AdminPermissions {
+  countries: boolean;
+  visaProducts: boolean;
+  nationalities: boolean;
+  embassies: boolean;
+  coupons: boolean;
+  additionalInfo: boolean;
+  customers: boolean;
+  applications: boolean;
+  finances: boolean;
+}
+
 @Entity('auth') // ← specify table name as 'auth'
 export class Admin {
   @PrimaryGeneratedColumn()
@@ -13,6 +27,12 @@ export class Admin {
 
   @Column()
   password: string;
+
+  @Column({ type: 'varchar', default: 'superadmin' })
+  role: AdminRole;
+
+  @Column({ type: 'jsonb', nullable: true })
+  permissions: AdminPermissions;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -15,6 +15,7 @@ async function bootstrap() {
     'https://ivisa123-landing.vercel.app',
     'http://localhost:3000',
     'http://localhost:3001',
+    'http://localhost:3001',
     'http://localhost:5173',
   ];
 
@@ -46,7 +47,7 @@ async function bootstrap() {
     }),
   );
 
-  // Seed admins with error handlingg
+  // Seed admins with error handling
   try {
     const dataSource = app.get(DataSource);
     await seedAdmins(dataSource);

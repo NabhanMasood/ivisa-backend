@@ -23,7 +23,7 @@ import { SubmitCompleteApplicationDto } from './dto/submit-complete-application.
 export class VisaApplicationsController {
   constructor(
     private readonly visaApplicationsService: VisaApplicationsService,
-  ) {}
+  ) { }
 
   /**
    * POST /visa-applications/draft
@@ -79,8 +79,21 @@ export class VisaApplicationsController {
     }
   }
 
-
-  
+  /**
+   * GET /visa-applications/track/:applicationNumber
+   * Get application by application number (for tracking URL in emails)
+   */
+  @Get('track/:applicationNumber')
+  async getByApplicationNumber(@Param('applicationNumber') applicationNumber: string) {
+    try {
+      return await this.visaApplicationsService.findByApplicationNumber(applicationNumber);
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to fetch application',
+      });
+    }
+  }
 
   /**
    * GET /visa-applications
@@ -155,69 +168,80 @@ export class VisaApplicationsController {
     }
   }
 
-/**
- * POST /visa-applications/:id/request-resubmission  (✅ Changed from PATCH to POST)
- * Admin requests resubmission - supports both single and multiple requests
- */
-/**
- * POST /visa-applications/:id/resubmission-requests  ✅ Changed URL
- * Admin requests resubmission - supports both single and multiple requests
- */
-@Post(':id/resubmission-requests')  // ✅ Changed from request-resubmission
-async createResubmissionRequests(  // ✅ Renamed method
-  @Param('id', ParseIntPipe) id: number,
-  @Body() body: {
-    requests: Array<{
-      target: 'application' | 'traveler';
-      travelerId?: number;
-      fieldIds: number[];
-      note?: string;
-    }>;
+  /**
+   * POST /visa-applications/:id/request-resubmission  (✅ Changed from PATCH to POST)
+   * Admin requests resubmission - supports both single and multiple requests
+   */
+  /**
+   * POST /visa-applications/:id/resubmission-requests  ✅ Changed URL
+   * Admin requests resubmission - supports both single and multiple requests
+   */
+  @Post(':id/resubmission-requests')  // ✅ Changed from request-resubmission
+  async createResubmissionRequests(  // ✅ Renamed method
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: {
+      requests: Array<{
+        target: 'application' | 'traveler';
+        travelerId?: number;
+        fieldIds?: number[]; // Existing field IDs from visa product
+        newFields?: Array<{ // New custom fields to create for this user only
+          fieldType: string;
+          question: string;
+          placeholder?: string;
+          isRequired?: boolean;
+          options?: string[];
+          allowedFileTypes?: string[];
+          maxFileSizeMB?: number;
+          minLength?: number;
+          maxLength?: number;
+        }>;
+        note?: string;
+      }>;
+    }
+  ) {
+    try {
+      return await this.visaApplicationsService.requestResubmission(
+        id,
+        body.requests
+      );
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to request resubmission',
+      });
+    }
   }
-) {
-  try {
-    return await this.visaApplicationsService.requestResubmission(
-      id,
-      body.requests
-    );
-  } catch (error) {
-    throw new BadRequestException({
-      status: false,
-      message: error.message || 'Failed to request resubmission',
-    });
-  }
-}
 
-/**
- * GET /visa-applications/:id/resubmission-requests/active  ✅ Changed URL
- * Get active resubmission requests for an application
- */
-@Get(':id/resubmission-requests/active')  // ✅ Added /active to differentiate from POST
-async getActiveResubmissionRequests(@Param('id', ParseIntPipe) id: number) {
-  try {
-    return await this.visaApplicationsService.getActiveResubmissionRequests(id);
-  } catch (error) {
-    throw new BadRequestException({
-      status: false,
-      message: error.message || 'Failed to fetch resubmission requests',
-    });
+  /**
+   * GET /visa-applications/:id/resubmission-requests/active  ✅ Changed URL
+   * Get active resubmission requests for an application
+   */
+  @Get(':id/resubmission-requests/active')  // ✅ Added /active to differentiate from POST
+  async getActiveResubmissionRequests(@Param('id', ParseIntPipe) id: number) {
+    try {
+      return await this.visaApplicationsService.getActiveResubmissionRequests(id);
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to fetch resubmission requests',
+      });
+    }
   }
-}
-/**
- * GET /visa-applications/:id/resubmission-requests
- * Get active resubmission requests for an application
- */
-@Get(':id/resubmission-requests')
-async getResubmissionRequests(@Param('id', ParseIntPipe) id: number) {
-  try {
-    return await this.visaApplicationsService.getActiveResubmissionRequests(id);
-  } catch (error) {
-    throw new BadRequestException({
-      status: false,
-      message: error.message || 'Failed to fetch resubmission requests',
-    });
+  /**
+   * GET /visa-applications/:id/resubmission-requests
+   * Get active resubmission requests for an application
+   */
+  @Get(':id/resubmission-requests')
+  async getResubmissionRequests(@Param('id', ParseIntPipe) id: number) {
+    try {
+      return await this.visaApplicationsService.getActiveResubmissionRequests(id);
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to fetch resubmission requests',
+      });
+    }
   }
-}
   /**
    * POST /visa-applications/:id/admin-fields
    * Add admin-only custom fields for this application (optionally targeted to a traveler)
@@ -239,7 +263,7 @@ async getResubmissionRequests(@Param('id', ParseIntPipe) id: number) {
 
 
 
-  
+
   /**
    * DELETE /visa-applications/:id/admin-fields/:fieldId
    * Remove an admin-only custom field by its ID (negative ID)

@@ -14,6 +14,9 @@ export class UpdateStatusDto {
     'rejected',
     'cancelled',
     'completed',
+    // Kanban column values (will be mapped to actual statuses)
+    'pending',
+    'in_process',
   ])
   status: string;
 }

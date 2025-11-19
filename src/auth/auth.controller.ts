@@ -1,20 +1,22 @@
-import { Body, Controller, Post, Res, Patch, Param, ParseIntPipe } from '@nestjs/common';
+import { Body, Controller, Post, Res, Patch, Param, ParseIntPipe, Get, Delete, Put } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
+import { CreateSubadminDto } from './dto/create-subadmin.dto';
+import { UpdateSubadminDto } from './dto/update-subadmin.dto';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   // CUSTOMER ROUTES (for customer app)
   @Post('customer/register')
   async customerRegister(@Body() dto: RegisterDto, @Res() res: Response) {
     const result = await this.authService.customerRegister(dto);
-    
+
     res.cookie('auth_token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -94,7 +96,7 @@ export class AuthController {
   @Post('login')
   async adminLogin(@Body() dto: LoginDto, @Res() res: Response) {
     const result = await this.authService.adminLogin(dto);
-    
+
     res.cookie('auth_token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -125,10 +127,15 @@ export class AuthController {
   logout(@Res() res: Response) {
     res.clearCookie('auth_token');
     res.clearCookie('admin_info');
-    return res.json({ 
+    return res.json({
       status: true,
-      message: 'Logged out successfully' 
+      message: 'Logged out successfully'
     });
+  }
+
+  @Get('profile/:adminId')
+  async getAdminProfile(@Param('adminId', ParseIntPipe) adminId: number) {
+    return this.authService.getAdminProfile(adminId);
   }
 
   // Password change endpoint for customers
@@ -155,5 +162,34 @@ export class AuthController {
       changeEmailDto.newEmail,
       changeEmailDto.password,
     );
+  }
+
+  // ==================== SUB-ADMIN MANAGEMENT ====================
+  @Post('subadmins')
+  async createSubadmin(@Body() dto: CreateSubadminDto) {
+    return this.authService.createSubadmin(dto);
+  }
+
+  @Get('subadmins')
+  async getAllSubadmins() {
+    return this.authService.getAllSubadmins();
+  }
+
+  @Get('subadmins/:id')
+  async getSubadminById(@Param('id', ParseIntPipe) id: number) {
+    return this.authService.getSubadminById(id);
+  }
+
+  @Put('subadmins/:id')
+  async updateSubadmin(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateSubadminDto,
+  ) {
+    return this.authService.updateSubadmin(id, dto);
+  }
+
+  @Delete('subadmins/:id')
+  async deleteSubadmin(@Param('id', ParseIntPipe) id: number) {
+    return this.authService.deleteSubadmin(id);
   }
 }

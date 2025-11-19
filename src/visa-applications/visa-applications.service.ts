@@ -18,6 +18,8 @@ import { CouponsService } from '../coupons/coupons.service';
 import { CardInfoService } from '../card-info/card-info.service';
 import { CardInfo } from '../card-info/entities/card-info.entity';
 import { VisaApplication, ResubmissionRequest } from './entities/visa-application.entity';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class VisaApplicationsService {
@@ -32,6 +34,8 @@ export class VisaApplicationsService {
     private travelerRepo: Repository<Traveler>,
     private couponsService: CouponsService,
     private cardInfoService: CardInfoService,
+    private emailService: EmailService,
+    private configService: ConfigService,
   ) { }
 
   /**
@@ -235,6 +239,247 @@ export class VisaApplicationsService {
   }
 
   /**
+   * Get a single visa application by application number (for tracking)
+   */
+  async findByApplicationNumber(applicationNumber: string) {
+    try {
+      const application = await this.applicationRepo.findOne({
+        where: { applicationNumber },
+        relations: ['customer', 'visaProduct', 'travelers', 'payment'],
+      });
+
+      if (!application) {
+        throw new NotFoundException(
+          `Visa application with number ${applicationNumber} not found`,
+        );
+      }
+
+      // Use the same formatting logic as findOne
+      return this.formatApplicationDetails(application);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error.message || 'Error fetching visa application',
+      );
+    }
+  }
+
+  /**
+   * Format application details (used by findOne and findByApplicationNumber)
+   */
+  private formatApplicationDetails(application: VisaApplication) {
+    // Reconstruct traveler 1 (the customer) from customer data
+    // Traveler 1 is stored in customer table, not in travelers table
+    const customerTraveler = application.customer ? {
+      firstName: application.customer.fullname.split(' ')[0] || '',
+      lastName: application.customer.fullname.split(' ').slice(1).join(' ') || '',
+      email: application.customer.email,
+      dateOfBirth: application.customer.dateOfBirth,
+      passportNationality: application.customer.passportNationality,
+      passportNumber: application.customer.passportNumber,
+      passportExpiryDate: application.customer.passportExpiryDate,
+      residenceCountry: application.customer.residenceCountry,
+      nationality: application.customer.nationality,
+      hasSchengenVisa: application.customer.hasSchengenVisa,
+    } : null;
+
+    // ✅ Format travelers WITH their fieldResponses
+    const formattedTravelers = (application.travelers || []).map(traveler => ({
+      id: traveler.id,
+      firstName: traveler.firstName,
+      lastName: traveler.lastName,
+      email: traveler.email,
+      dateOfBirth: traveler.dateOfBirth,
+      passportNationality: traveler.passportNationality,
+      passportNumber: traveler.passportNumber,
+      passportExpiryDate: traveler.passportExpiryDate,
+      residenceCountry: traveler.residenceCountry,
+      hasSchengenVisa: traveler.hasSchengenVisa,
+      placeOfBirth: traveler.placeOfBirth,
+      notes: traveler.notes,
+      fieldResponses: traveler.fieldResponses || {},  // ✅ CRITICAL: Include fieldResponses
+    }));
+
+    // Combine customer (traveler 1) with additional travelers
+    const allTravelers = customerTraveler
+      ? [customerTraveler, ...formattedTravelers]
+      : formattedTravelers;
+
+    return {
+      status: true,
+      message: 'Visa application retrieved successfully',
+      data: {
+        id: application.id,
+        applicationNumber: application.applicationNumber,
+        customer: {
+          id: application.customer?.id || null,
+          fullname: application.customer?.fullname || '',
+          email: application.customer?.email || '',
+          nationality: application.customer?.nationality || null,
+          passportNumber: application.customer?.passportNumber || null,
+          passportNationality: application.customer?.passportNationality || null,
+          passportExpiryDate: application.customer?.passportExpiryDate || null,
+          dateOfBirth: application.customer?.dateOfBirth || null,
+          residenceCountry: application.customer?.residenceCountry || null,
+          phoneNumber: application.customer?.phoneNumber || null,
+          status: application.customer?.status || null,
+          createdAt: application.customer?.createdAt || null,
+        },
+        customerId: application.customerId,
+        visaProductId: application.visaProductId,
+        visaProductName: application.visaProduct?.productName || '',
+        nationality: application.nationality,
+        destinationCountry: application.destinationCountry,
+        visaType: application.visaType,
+        numberOfTravelers: application.numberOfTravelers,
+        phoneNumber: application.phoneNumber,
+        processingType: application.processingType,
+        processingFee: parseFloat(application.processingFee.toString()),
+        governmentFee: parseFloat(application.governmentFee.toString()),
+        serviceFee: parseFloat(application.serviceFee.toString()),
+        totalAmount: parseFloat(application.totalAmount.toString()),
+        status: application.status,
+        submittedAt: application.submittedAt,
+        approvedAt: application.approvedAt,
+        rejectionReason: application.rejectionReason,
+        notes: application.notes,
+
+        resubmissionRequests: application.resubmissionRequests || [],
+
+
+        resubmissionTarget: application.resubmissionTarget || undefined,
+        resubmissionTravelerId: application.resubmissionTravelerId || undefined,
+        requestedFieldIds: application.requestedFieldIds || undefined,
+
+        travelers: allTravelers, // ✅ Now includes fieldResponses for each traveler
+        payment: application.payment || null,
+        fieldResponses: (() => {
+          // Get application-level responses
+          const applicationResponses = this.normalizeApplicationFieldResponses(
+            application.fieldResponses,
+          );
+
+          // Get traveler-specific responses from Traveler entities
+          const travelerResponsesMap = new Map<number, any[]>();
+
+          if (application.travelers && application.travelers.length > 0) {
+            // Create field map for traveler responses (for consistency)
+            const travelerFieldMap = new Map<number | string, any>();
+            if (application.visaProduct?.fields) {
+              application.visaProduct.fields.forEach((f: any) => {
+                travelerFieldMap.set(f.id, f);
+                travelerFieldMap.set(String(f.id), f);
+              });
+            }
+
+            for (const traveler of application.travelers) {
+              if (traveler.fieldResponses && Object.keys(traveler.fieldResponses).length > 0) {
+                const responses = Object.entries(traveler.fieldResponses).map(
+                  ([fieldIdKey, response]: [string, any]) => {
+                    // Try to match field by both number and string
+                    const fieldIdNum = parseInt(fieldIdKey, 10);
+                    const field = travelerFieldMap.get(fieldIdNum) || travelerFieldMap.get(fieldIdKey);
+
+                    return {
+                      fieldId: isNaN(fieldIdNum) ? fieldIdKey : fieldIdNum,
+                      field: field
+                        ? {
+                          id: field.id,
+                          question: field.question,
+                          fieldType: field.fieldType,
+                          displayOrder: field.displayOrder || 0,
+                        }
+                        : null,
+                      value: response.value,
+                      filePath: response.filePath,
+                      fileName: response.fileName,
+                      fileSize: response.fileSize,
+                      submittedAt: response.submittedAt,
+                    };
+                  },
+                ).sort((a, b) => {
+                  // Sort by field displayOrder for consistent ordering
+                  const orderA = a.field?.displayOrder || 0;
+                  const orderB = b.field?.displayOrder || 0;
+                  return orderA - orderB;
+                });
+                travelerResponsesMap.set(traveler.id, responses);
+              }
+            }
+          }
+
+          // IMPORTANT: Iterate over FIELDS first (in displayOrder), then find responses
+          // This ensures correct ordering even if responses were stored with wrong keys
+          const fields = (application.visaProduct?.fields || []).filter(
+            (f: any) => f.isActive !== false,
+          ).sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+          // Create response map for quick lookup
+          const responseMap = new Map<string | number, any>();
+          Object.entries(applicationResponses).forEach(([key, value]) => {
+            responseMap.set(key, value);
+            responseMap.set(parseInt(key, 10), value); // Also support number keys
+          });
+
+          // Check if responses are using sequential indices (1, 2, 3, ...) instead of field IDs
+          const responseKeys = Object.keys(applicationResponses);
+          const areSequentialIndices = responseKeys.every((key, index) => {
+            const numKey = parseInt(key, 10);
+            return !isNaN(numKey) && numKey === index + 1;
+          }) && responseKeys.length > 0;
+
+          // Build application responses array by iterating over fields
+          const applicationResponsesArray = fields.map((field: any, index: number) => {
+            let response: any = null;
+
+            if (areSequentialIndices) {
+              // WORKAROUND: If responses are stored with sequential indices, match by position
+              // Response "1" maps to fields[0], "2" to fields[1], etc.
+              const sequentialKey = String(index + 1);
+              response = responseMap.get(sequentialKey) || responseMap.get(index + 1);
+            } else {
+              // Normal case: Try to find response by field.id (both string and number)
+              response = responseMap.get(field.id) || responseMap.get(String(field.id));
+            }
+
+            if (response) {
+              return {
+                fieldId: field.id, // Always return actual field.id, not the stored key
+                field: {
+                  id: field.id,
+                  question: field.question,
+                  fieldType: field.fieldType,
+                  displayOrder: field.displayOrder || 0,
+                },
+                value: response.value,
+                filePath: response.filePath,
+                fileName: response.fileName,
+                fileSize: response.fileSize,
+                submittedAt: response.submittedAt,
+              };
+            }
+            return null;
+          }).filter((r: any) => r !== null); // Remove fields without responses
+
+          return {
+            application: applicationResponsesArray,
+            travelers: Array.from(travelerResponsesMap.entries()).map(
+              ([travelerId, responses]) => ({
+                travelerId,
+                responses,
+              }),
+            ),
+          };
+        })(),
+        createdAt: application.createdAt,
+        updatedAt: application.updatedAt,
+      },
+    };
+  }
+
+  /**
    * Get a single visa application by ID
    */
   async findOne(id: number) {
@@ -250,213 +495,7 @@ export class VisaApplicationsService {
         );
       }
 
-      // Reconstruct traveler 1 (the customer) from customer data
-      // Traveler 1 is stored in customer table, not in travelers table
-      const customerTraveler = application.customer ? {
-        firstName: application.customer.fullname.split(' ')[0] || '',
-        lastName: application.customer.fullname.split(' ').slice(1).join(' ') || '',
-        email: application.customer.email,
-        dateOfBirth: application.customer.dateOfBirth,
-        passportNationality: application.customer.passportNationality,
-        passportNumber: application.customer.passportNumber,
-        passportExpiryDate: application.customer.passportExpiryDate,
-        residenceCountry: application.customer.residenceCountry,
-        nationality: application.customer.nationality,
-        hasSchengenVisa: application.customer.hasSchengenVisa,
-      } : null;
-
-      // ✅ Format travelers WITH their fieldResponses
-      const formattedTravelers = (application.travelers || []).map(traveler => ({
-        id: traveler.id,
-        firstName: traveler.firstName,
-        lastName: traveler.lastName,
-        email: traveler.email,
-        dateOfBirth: traveler.dateOfBirth,
-        passportNationality: traveler.passportNationality,
-        passportNumber: traveler.passportNumber,
-        passportExpiryDate: traveler.passportExpiryDate,
-        residenceCountry: traveler.residenceCountry,
-        hasSchengenVisa: traveler.hasSchengenVisa,
-        placeOfBirth: traveler.placeOfBirth,
-        notes: traveler.notes,
-        fieldResponses: traveler.fieldResponses || {},  // ✅ CRITICAL: Include fieldResponses
-      }));
-
-      // Combine customer (traveler 1) with additional travelers
-      const allTravelers = customerTraveler
-        ? [customerTraveler, ...formattedTravelers]
-        : formattedTravelers;
-
-      return {
-        status: true,
-        message: 'Visa application retrieved successfully',
-        data: {
-          id: application.id,
-          applicationNumber: application.applicationNumber,
-          customer: {
-            id: application.customer?.id || null,
-            fullname: application.customer?.fullname || '',
-            email: application.customer?.email || '',
-            nationality: application.customer?.nationality || null,
-            passportNumber: application.customer?.passportNumber || null,
-            passportNationality: application.customer?.passportNationality || null,
-            passportExpiryDate: application.customer?.passportExpiryDate || null,
-            dateOfBirth: application.customer?.dateOfBirth || null,
-            residenceCountry: application.customer?.residenceCountry || null,
-            phoneNumber: application.customer?.phoneNumber || null,
-            status: application.customer?.status || null,
-            createdAt: application.customer?.createdAt || null,
-          },
-          customerId: application.customerId,
-          visaProductId: application.visaProductId,
-          visaProductName: application.visaProduct?.productName || '',
-          nationality: application.nationality,
-          destinationCountry: application.destinationCountry,
-          visaType: application.visaType,
-          numberOfTravelers: application.numberOfTravelers,
-          phoneNumber: application.phoneNumber,
-          processingType: application.processingType,
-          processingFee: parseFloat(application.processingFee.toString()),
-          governmentFee: parseFloat(application.governmentFee.toString()),
-          serviceFee: parseFloat(application.serviceFee.toString()),
-          totalAmount: parseFloat(application.totalAmount.toString()),
-          status: application.status,
-          submittedAt: application.submittedAt,
-          approvedAt: application.approvedAt,
-          rejectionReason: application.rejectionReason,
-          notes: application.notes,
-
-          resubmissionRequests: application.resubmissionRequests || [],
-
-
-          resubmissionTarget: application.resubmissionTarget || undefined,
-          resubmissionTravelerId: application.resubmissionTravelerId || undefined,
-          requestedFieldIds: application.requestedFieldIds || undefined,
-
-          travelers: allTravelers, // ✅ Now includes fieldResponses for each traveler
-          payment: application.payment || null,
-          fieldResponses: (() => {
-            // Get application-level responses
-            const applicationResponses = this.normalizeApplicationFieldResponses(
-              application.fieldResponses,
-            );
-
-            // Get traveler-specific responses from Traveler entities
-            const travelerResponsesMap = new Map<number, any[]>();
-
-            if (application.travelers && application.travelers.length > 0) {
-              // Create field map for traveler responses (for consistency)
-              const travelerFieldMap = new Map<number | string, any>();
-              if (application.visaProduct?.fields) {
-                application.visaProduct.fields.forEach((f: any) => {
-                  travelerFieldMap.set(f.id, f);
-                  travelerFieldMap.set(String(f.id), f);
-                });
-              }
-
-              for (const traveler of application.travelers) {
-                if (traveler.fieldResponses && Object.keys(traveler.fieldResponses).length > 0) {
-                  const responses = Object.entries(traveler.fieldResponses).map(
-                    ([fieldIdKey, response]: [string, any]) => {
-                      // Try to match field by both number and string
-                      const fieldIdNum = parseInt(fieldIdKey, 10);
-                      const field = travelerFieldMap.get(fieldIdNum) || travelerFieldMap.get(fieldIdKey);
-
-                      return {
-                        fieldId: isNaN(fieldIdNum) ? fieldIdKey : fieldIdNum,
-                        field: field
-                          ? {
-                            id: field.id,
-                            question: field.question,
-                            fieldType: field.fieldType,
-                            displayOrder: field.displayOrder || 0,
-                          }
-                          : null,
-                        value: response.value,
-                        filePath: response.filePath,
-                        fileName: response.fileName,
-                        fileSize: response.fileSize,
-                        submittedAt: response.submittedAt,
-                      };
-                    },
-                  ).sort((a, b) => {
-                    // Sort by field displayOrder for consistent ordering
-                    const orderA = a.field?.displayOrder || 0;
-                    const orderB = b.field?.displayOrder || 0;
-                    return orderA - orderB;
-                  });
-                  travelerResponsesMap.set(traveler.id, responses);
-                }
-              }
-            }
-
-            // IMPORTANT: Iterate over FIELDS first (in displayOrder), then find responses
-            // This ensures correct ordering even if responses were stored with wrong keys
-            const fields = (application.visaProduct?.fields || []).filter(
-              (f: any) => f.isActive !== false,
-            ).sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0));
-
-            // Create response map for quick lookup
-            const responseMap = new Map<string | number, any>();
-            Object.entries(applicationResponses).forEach(([key, value]) => {
-              responseMap.set(key, value);
-              responseMap.set(parseInt(key, 10), value); // Also support number keys
-            });
-
-            // Check if responses are using sequential indices (1, 2, 3, ...) instead of field IDs
-            const responseKeys = Object.keys(applicationResponses);
-            const areSequentialIndices = responseKeys.every((key, index) => {
-              const numKey = parseInt(key, 10);
-              return !isNaN(numKey) && numKey === index + 1;
-            }) && responseKeys.length > 0;
-
-            // Build application responses array by iterating over fields
-            const applicationResponsesArray = fields.map((field: any, index: number) => {
-              let response: any = null;
-
-              if (areSequentialIndices) {
-                // WORKAROUND: If responses are stored with sequential indices, match by position
-                // Response "1" maps to fields[0], "2" to fields[1], etc.
-                const sequentialKey = String(index + 1);
-                response = responseMap.get(sequentialKey) || responseMap.get(index + 1);
-              } else {
-                // Normal case: Try to find response by field.id (both string and number)
-                response = responseMap.get(field.id) || responseMap.get(String(field.id));
-              }
-
-              if (response) {
-                return {
-                  fieldId: field.id, // Always return actual field.id, not the stored key
-                  field: {
-                    id: field.id,
-                    question: field.question,
-                    fieldType: field.fieldType,
-                    displayOrder: field.displayOrder || 0,
-                  },
-                  value: response.value,
-                  filePath: response.filePath,
-                  fileName: response.fileName,
-                  fileSize: response.fileSize,
-                  submittedAt: response.submittedAt,
-                };
-              }
-              return null;
-            }).filter((r: any) => r !== null); // Remove fields without responses
-
-            return {
-              application: applicationResponsesArray,
-              travelers: Array.from(travelerResponsesMap.entries()).map(
-                ([travelerId, responses]) => ({
-                  travelerId,
-                  responses,
-                }),
-              ),
-            };
-          })(),
-          createdAt: application.createdAt,
-          updatedAt: application.updatedAt,
-        },
-      };
+      return this.formatApplicationDetails(application);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -501,6 +540,17 @@ export class VisaApplicationsService {
           throw new NotFoundException(
             `Visa product with ID ${updateDto.visaProductId} not found`,
           );
+        }
+      }
+
+      // Map kanban column values to actual backend statuses if status is being updated
+      if (updateDto.status) {
+        const statusMapping: Record<string, string> = {
+          'pending': 'submitted',
+          'in_process': 'processing',
+        };
+        if (statusMapping[updateDto.status]) {
+          updateDto.status = statusMapping[updateDto.status];
         }
       }
 
@@ -555,24 +605,94 @@ export class VisaApplicationsService {
         );
       }
 
-      // Validate status transition
+      // Get current status first
       const currentStatus = application.status;
-      const allowedTransitions: Record<string, string[]> = {
-        'draft': ['submitted', 'cancelled'],
-        'submitted': ['processing', 'cancelled'],
-        'resubmission': ['processing', 'cancelled'],
-        'processing': ['under_review', 'Additional Info required', 'resubmission', 'cancelled', 'completed'],
-        'under_review': ['approved', 'rejected', 'Additional Info required', 'resubmission', 'completed'],
-        'approved': ['completed'], // Can be marked as completed
-        'rejected': [], // Final state
-        'cancelled': [], // Final state
-        'completed': [], // Final state
+
+      // Map kanban column values to actual backend statuses
+      // Helper function to determine which kanban column a status belongs to
+      const getKanbanCategory = (status: string): string => {
+        const statusLower = status.toLowerCase().replace(/\s+/g, '_');
+
+        // ✅ Check for kanban column values first (before checking actual statuses)
+        if (statusLower === 'pending' || statusLower === 'in_process') {
+          return statusLower; // Return the kanban column value as-is
+        }
+
+        // Then check actual backend statuses
+        // Note: 'draft' is kept for backward compatibility but new applications won't use it
+        if (['draft', 'submitted'].includes(statusLower)) return 'pending';
+        if (['processing', 'under_review', 'additional_info_required', 'additional info required', 'resubmission'].includes(statusLower)) return 'in_process';
+        if (['approved', 'completed'].includes(statusLower)) return 'completed';
+        if (['rejected', 'cancelled'].includes(statusLower)) return 'rejected';
+        return 'pending'; // default
       };
 
-      const allowedNextStatuses = allowedTransitions[currentStatus] || [];
+      // Determine target kanban category
+      const targetCategory = getKanbanCategory(newStatus);
+      const currentCategory = getKanbanCategory(currentStatus);
+
+      // Map kanban column values to actual backend statuses
+      let normalizedStatus = newStatus;
+
+      // List of valid backend statuses (including kanban column values)
+      // ✅ IMPORTANT: These are the actual status values used in the system
+      // When frontend sends these exact values (e.g., "Additional Info required", "processing", "resubmission"),
+      // they pass through unchanged - no mapping needed
+      const validBackendStatuses = [
+        'draft', 'submitted', 'resubmission', 'Additional Info required',
+        'processing', 'under_review', 'approved', 'rejected', 'cancelled', 'completed',
+        // Kanban column values - save these directly
+        'pending', 'in_process'
+      ];
+
+      // ✅ If newStatus is already a valid backend status, use it directly (no mapping)
+      // This preserves existing workflow: "Additional Info required" → "processing" → "resubmission" etc.
+      if (validBackendStatuses.includes(newStatus)) {
+        normalizedStatus = newStatus;
+      } else if (targetCategory === 'pending') {
+        // If moving within pending category, preserve the original status
+        if (currentCategory === 'pending') {
+          normalizedStatus = currentStatus; // Preserves existing pending status
+        } else {
+          // Moving from another category to pending, save as "pending" directly
+          normalizedStatus = 'pending';
+        }
+      } else if (targetCategory === 'in_process') {
+        // If moving within in_process category, preserve the original status
+        if (currentCategory === 'in_process') {
+          normalizedStatus = currentStatus; // Preserves "Additional Info required", "resubmission", etc.
+        } else {
+          // Moving from another category to in_process, save as "in_process" directly
+          normalizedStatus = 'in_process';
+        }
+      } else if (targetCategory === 'completed') {
+        // For completed, use 'completed' status
+        normalizedStatus = 'completed';
+      } else if (targetCategory === 'rejected') {
+        // For rejected, use 'rejected' status
+        normalizedStatus = 'rejected';
+      }
+
+      // ✅ ADMIN FULL CONTROL: Allow any valid status transition for admin operations
+      // List of all valid backend statuses (including kanban column values)
+      const validStatuses = [
+        'draft',
+        'submitted',
+        'resubmission',
+        'Additional Info required',
+        'processing',
+        'under_review',
+        'approved',
+        'rejected',
+        'cancelled',
+        'completed',
+        // Kanban column values - these are now valid statuses
+        'pending',
+        'in_process',
+      ];
 
       // ✅ ADD THIS: Allow idempotent updates (same status)
-      if (currentStatus === newStatus) {
+      if (currentStatus === normalizedStatus) {
         return {
           status: true,
           message: 'Application status is already set to the requested status',
@@ -585,26 +705,72 @@ export class VisaApplicationsService {
         };
       }
 
-      // Validate the transition is allowed
-      if (allowedNextStatuses.includes(newStatus)) {
-        application.status = newStatus;
-        const result = await this.applicationRepo.save(application);
-
-        return {
-          status: true,
-          message: 'Application status updated successfully',
-          data: {
-            id: result.id,
-            applicationNumber: result.applicationNumber,
-            status: result.status,
-            previousStatus: currentStatus,
-          },
-        };
-      } else {
+      // Validate that the target status is a valid backend status
+      if (!validStatuses.includes(normalizedStatus)) {
         throw new BadRequestException(
-          `Cannot change status from "${currentStatus}" to "${newStatus}". Allowed transitions: ${allowedNextStatuses.join(', ') || 'none'}`,
+          `Invalid status: "${normalizedStatus}". Valid statuses are: ${validStatuses.join(', ')}`,
         );
       }
+
+      // ✅ ADMIN FULL CONTROL: Allow any transition between valid statuses
+      // No transition restrictions - admins can move applications to any status
+      application.status = normalizedStatus;
+      const result = await this.applicationRepo.save(application);
+
+      // Send email notifications for specific status changes
+      // Load customer information for email
+      const applicationWithCustomer = await this.applicationRepo.findOne({
+        where: { id: application.id },
+        relations: ['customer'],
+      });
+
+      if (applicationWithCustomer?.customer?.email) {
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+        const trackingUrl = `${frontendUrl}/track/${applicationWithCustomer.applicationNumber}`;
+
+        // Send email based on new status (asynchronously)
+        if (normalizedStatus === 'Additional Info required') {
+          this.emailService.sendAdditionalInfoRequiredEmail(
+            applicationWithCustomer.customer.email,
+            applicationWithCustomer.customer.fullname,
+            applicationWithCustomer.applicationNumber,
+            trackingUrl,
+            application.notes,
+          ).catch(error => {
+            console.error('Failed to send additional info required email:', error);
+          });
+        } else if (normalizedStatus === 'resubmission') {
+          this.emailService.sendResubmissionRequiredEmail(
+            applicationWithCustomer.customer.email,
+            applicationWithCustomer.customer.fullname,
+            applicationWithCustomer.applicationNumber,
+            trackingUrl,
+            application.notes,
+          ).catch(error => {
+            console.error('Failed to send resubmission required email:', error);
+          });
+        } else if (normalizedStatus === 'completed') {
+          this.emailService.sendApplicationCompletedEmail(
+            applicationWithCustomer.customer.email,
+            applicationWithCustomer.customer.fullname,
+            applicationWithCustomer.applicationNumber,
+            trackingUrl,
+          ).catch(error => {
+            console.error('Failed to send application completed email:', error);
+          });
+        }
+      }
+
+      return {
+        status: true,
+        message: 'Application status updated successfully',
+        data: {
+          id: result.id,
+          applicationNumber: result.applicationNumber,
+          status: result.status,
+          previousStatus: currentStatus,
+        },
+      };
     } catch (error) {
       if (
         error instanceof NotFoundException ||
@@ -757,10 +923,10 @@ export class VisaApplicationsService {
         );
       }
 
-      // Only allow deletion of draft applications
-      if (application.status !== 'draft') {
+      // Only allow deletion of draft or submitted (pending) applications
+      if (!['draft', 'submitted'].includes(application.status)) {
         throw new BadRequestException(
-          'Can only delete applications in draft status',
+          'Can only delete applications in draft or pending (submitted) status',
         );
       }
 
@@ -799,8 +965,8 @@ export class VisaApplicationsService {
       ] = await Promise.all([
         this.applicationRepo.count(),
         this.applicationRepo.count({ where: { status: 'draft' } }),
-        // Count both legacy and new resubmission statuses
-        this.applicationRepo.count({ where: { status: 'resubmission' } }),
+        // Count submitted (pending) applications - this is the default status for new applications
+        this.applicationRepo.count({ where: { status: 'submitted' } }),
         this.applicationRepo.count({ where: { status: 'processing' } }),
         this.applicationRepo.count({ where: { status: 'approved' } }),
         this.applicationRepo.count({ where: { status: 'rejected' } }),
@@ -1324,6 +1490,35 @@ export class VisaApplicationsService {
       // 13. Commit transaction
       await queryRunner.commitTransaction();
 
+      // 14. Send email notification to customer with tracking URL and payment invoice
+      // The tracking URL should be provided by the frontend (e.g., https://yourdomain.com/track/{applicationNumber})
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+      const trackingUrl = `${frontendUrl}/track/${savedApplication.applicationNumber}`;
+
+      // Prepare payment details for invoice
+      const paymentDetails = {
+        governmentFee: parseFloat(savedApplication.governmentFee.toString()),
+        serviceFee: parseFloat(savedApplication.serviceFee.toString()),
+        processingFee: parseFloat(savedApplication.processingFee.toString()),
+        totalAmount: parseFloat(savedApplication.totalAmount.toString()),
+        discountAmount: submitDto.discountAmount || undefined,
+        couponCode: submitDto.couponCode || undefined,
+        paymentMethod: submitDto.payment.paymentGateway === 'stripe' ? 'Credit Card' : submitDto.payment.paymentGateway,
+        transactionId: savedPayment.transactionId || undefined,
+        paidAt: savedPayment.paidAt,
+      };
+
+      // Send email asynchronously (don't wait for it to complete)
+      this.emailService.sendApplicationSubmittedEmail(
+        savedCustomer.email,
+        savedCustomer.fullname,
+        savedApplication.applicationNumber,
+        trackingUrl,
+        paymentDetails,
+      ).catch(error => {
+        console.error('Failed to send application submitted email:', error);
+      });
+
       // Reconstruct traveler 1 (the customer) from customer data
       const customerTraveler = {
         firstName: savedCustomer.fullname.split(' ')[0] || firstTraveler.firstName,
@@ -1411,15 +1606,30 @@ export class VisaApplicationsService {
    */
   /**
    * Request resubmission (supports both Option A and Option B)
+   * Now supports creating new custom fields specific to this user
    * @param applicationId - Application ID
    * @param requests - Array of resubmission requests (can be single or multiple)
+   *                   Each request can include:
+   *                   - fieldIds: existing field IDs from visa product (positive numbers)
+   *                   - newFields: new custom fields to create (will get negative IDs, unique to this application)
    */
   async requestResubmission(
     applicationId: number,
     requests: Array<{
       target: 'application' | 'traveler';
       travelerId?: number;
-      fieldIds: number[];
+      fieldIds?: number[]; // Existing field IDs from visa product
+      newFields?: Array<{ // New custom fields to create for this user only
+        fieldType: string;
+        question: string;
+        placeholder?: string;
+        isRequired?: boolean;
+        options?: string[];
+        allowedFileTypes?: string[];
+        maxFileSizeMB?: number;
+        minLength?: number;
+        maxLength?: number;
+      }>;
       note?: string;
     }>
   ) {
@@ -1449,26 +1659,78 @@ export class VisaApplicationsService {
         }
       }
 
-      // Generate unique IDs for each request
-      const resubmissionRequests: ResubmissionRequest[] = requests.map((req) => ({
-        id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        target: req.target,
-        travelerId: req.travelerId || null,
-        fieldIds: req.fieldIds,
-        note: req.note || null,
-        requestedAt: new Date().toISOString(),
-        fulfilledAt: null,
-      }));
+      // Process each request: create new fields if provided, then build resubmission requests
+      const processedRequests: ResubmissionRequest[] = [];
+      const allFieldIds: number[] = [];
+
+      for (const req of requests) {
+        const fieldIds: number[] = [...(req.fieldIds || [])];
+
+        // ✅ NEW: Create new custom fields if provided
+        if (req.newFields && req.newFields.length > 0) {
+          // Initialize admin fields storage if needed
+          if (!application.adminRequestedFields) {
+            application.adminRequestedFields = [];
+          }
+          if (
+            application.adminRequestedFieldMinId === undefined ||
+            application.adminRequestedFieldMinId === null ||
+            application.adminRequestedFieldMinId >= 0
+          ) {
+            application.adminRequestedFieldMinId = 0;
+          }
+
+          // Create each new field and get its negative ID
+          for (const newField of req.newFields) {
+            application.adminRequestedFieldMinId =
+              (application.adminRequestedFieldMinId || 0) - 1;
+            const adminField = {
+              id: application.adminRequestedFieldMinId, // negative number
+              fieldType: newField.fieldType,
+              question: newField.question,
+              placeholder: newField.placeholder,
+              isRequired: newField.isRequired ?? false,
+              options: newField.options,
+              allowedFileTypes: newField.allowedFileTypes,
+              maxFileSizeMB: newField.maxFileSizeMB,
+              minLength: newField.minLength,
+              maxLength: newField.maxLength,
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              travelerId: req.target === 'traveler' ? req.travelerId : undefined,
+              source: 'admin',
+            };
+            application.adminRequestedFields.push(adminField);
+            fieldIds.push(adminField.id); // Add the negative ID to the fieldIds array
+          }
+        }
+
+        // Generate unique ID for this request
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const resubmissionRequest: ResubmissionRequest = {
+          id: requestId,
+          target: req.target,
+          travelerId: req.travelerId || null,
+          fieldIds: fieldIds, // Includes both existing field IDs and newly created negative IDs
+          note: req.note || null,
+          requestedAt: new Date().toISOString(),
+          fulfilledAt: null,
+        };
+
+        processedRequests.push(resubmissionRequest);
+        allFieldIds.push(...fieldIds);
+      }
 
       // Store requests
-      application.resubmissionRequests = resubmissionRequests;
+      application.resubmissionRequests = processedRequests;
       application.status = 'resubmission';
 
       // ✅ BACKWARD COMPATIBILITY: Also set old fields for Option A (single request)
-      if (requests.length === 1) {
+      if (processedRequests.length === 1) {
         application.resubmissionTarget = requests[0].target;
         application.resubmissionTravelerId = requests[0].travelerId || null;
-        application.requestedFieldIds = requests[0].fieldIds;
+        application.requestedFieldIds = processedRequests[0].fieldIds;
       } else {
         // Multiple requests - clear old fields
         application.resubmissionTarget = null;
@@ -1483,7 +1745,7 @@ export class VisaApplicationsService {
         message: 'Resubmission requested successfully',
         data: {
           applicationId: application.id,
-          requests: resubmissionRequests,
+          requests: processedRequests,
         },
       };
     } catch (error) {

@@ -4,10 +4,12 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { Admin } from './entities/admin.entity';
 import { Customer } from '../customers/entities/customer.entity';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Admin, Customer])
+    TypeOrmModule.forFeature([Admin, Customer]),
+    EmailModule, // Import to use EmailService
   ],
   controllers: [AuthController],
   providers: [AuthService],

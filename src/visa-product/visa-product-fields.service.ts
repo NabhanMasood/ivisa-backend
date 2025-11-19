@@ -21,7 +21,7 @@ export class VisaProductFieldsService {
     private applicationRepo: Repository<VisaApplication>,
     @InjectRepository(Traveler)
     private travelerRepo: Repository<Traveler>,
-  ) {}
+  ) { }
 
   /**
    * Create a new custom field for a visa product (Admin only)
@@ -58,7 +58,7 @@ export class VisaProductFieldsService {
       const fieldsMaxId = fields.length > 0 ? Math.max(...fields.map((f) => f.id || 0)) : 0;
       const maxId = Math.max(currentMaxId, fieldsMaxId);
       const newFieldId = maxId + 1;
-      
+
       // Update the maxFieldId counter
       visaProduct.maxFieldId = newFieldId;
 
@@ -318,19 +318,19 @@ export class VisaProductFieldsService {
         where: { id: submitDto.applicationId },
         relations: ['visaProduct', 'travelers'],
       });
-  
+
       if (!application) {
         throw new NotFoundException(
           `Application with ID ${submitDto.applicationId} not found`,
         );
       }
-  
+
       // Normalize travelerId to number for safe comparison
       const submittedTravelerId =
         submitDto.travelerId !== undefined && submitDto.travelerId !== null
           ? Number(submitDto.travelerId)
           : undefined;
-  
+
       // If travelerId is provided, validate that the traveler belongs to this application
       if (submittedTravelerId) {
         const traveler = application.travelers?.find(
@@ -342,18 +342,18 @@ export class VisaProductFieldsService {
           );
         }
       }
-  
+
       // Build available fields set: product fields + admin fields for this context
       const productFieldsAll = application.visaProduct.fields || [];
       const activeProductFields = productFieldsAll.filter((f) => f.isActive !== false);
-  
+
       const adminFieldsAll = Array.isArray(application.adminRequestedFields)
         ? application.adminRequestedFields
         : [];
       const adminFieldsForContext = submitDto.travelerId
         ? adminFieldsAll.filter((f: any) => f.travelerId === submitDto.travelerId)
         : adminFieldsAll.filter((f: any) => !f.travelerId);
-  
+
       // Create field map for quick lookup (support both number and string keys)
       const fieldMap = new Map<number | string, any>();
       // Map product fields
@@ -366,13 +366,13 @@ export class VisaProductFieldsService {
         fieldMap.set(f.id, f);
         fieldMap.set(String(f.id), f);
       });
-  
+
       // ✅ NEW: Determine allowed field IDs from resubmissionRequests (Option B)
       let allowedIdsFromRequests: number[] = [];
       if (application.status === 'resubmission' && application.resubmissionRequests) {
         const relevantRequests = application.resubmissionRequests.filter((req) => {
           if (req.fulfilledAt) return false; // Skip fulfilled requests
-          
+
           if (submittedTravelerId) {
             // For traveler submissions
             return req.target === 'traveler' && req.travelerId === submittedTravelerId;
@@ -381,13 +381,13 @@ export class VisaProductFieldsService {
             return req.target === 'application';
           }
         });
-        
+
         // Collect all field IDs from relevant requests
         relevantRequests.forEach((req) => {
           allowedIdsFromRequests.push(...req.fieldIds);
         });
       }
-  
+
       // Determine allowed field IDs for this submission
       // Priority: 
       // 1. resubmissionRequests (Option B - new)
@@ -398,30 +398,30 @@ export class VisaProductFieldsService {
       const requestedIdsForTraveler =
         submitDto.travelerId && application.requestedFieldIdsByTraveler
           ? application.requestedFieldIdsByTraveler[String(submitDto.travelerId)] ||
-            application.requestedFieldIdsByTraveler[submitDto.travelerId as any]
+          application.requestedFieldIdsByTraveler[submitDto.travelerId as any]
           : undefined;
       const requestedIdsApp = application.requestedFieldIds || [];
       const requestedIds: number[] =
         (requestedIdsForTraveler && Array.isArray(requestedIdsForTraveler)
           ? requestedIdsForTraveler
           : requestedIdsApp) || [];
-  
+
       const defaultAllowedIds = activeProductFields.map((f) => f.id);
       const isResubmissionPhase =
         application.status === 'resubmission' ||
         application.status === 'Additional Info required';
-        
+
       const allowedIds: Array<number> =
         allowedIdsFromRequests.length > 0
           ? allowedIdsFromRequests // NEW: Priority 1
           : adminAllowedIds.length > 0
-          ? adminAllowedIds // Priority 2
-          : requestedIds.length > 0
-          ? requestedIds // Priority 3 (backward compatibility)
-          : isResubmissionPhase
-          ? [] // In resubmission without explicit requests, accept none
-          : defaultAllowedIds; // Priority 4
-  
+            ? adminAllowedIds // Priority 2
+            : requestedIds.length > 0
+              ? requestedIds // Priority 3 (backward compatibility)
+              : isResubmissionPhase
+                ? [] // In resubmission without explicit requests, accept none
+                : defaultAllowedIds; // Priority 4
+
       // Validate all provided field IDs exist
       const invalidFieldIds: number[] = [];
       for (const response of submitDto.responses) {
@@ -430,22 +430,22 @@ export class VisaProductFieldsService {
           invalidFieldIds.push(response.fieldId);
         }
       }
-  
+
       if (invalidFieldIds.length > 0) {
         throw new BadRequestException(
           `Invalid field IDs provided: ${invalidFieldIds.join(', ')}. ` +
-          `These fields do not exist or are not active for this visa product. ` +
-          `Please use the actual field.id values from the API, not array indices.`,
+          `These fields do not exist or are not active for this visa product/application. ` +
+          `Please use the actual field.id values from the API (positive for product fields, negative for admin-requested fields), not array indices.`,
         );
       }
-      
+
       // Filter out non-requested fields (when a restriction exists)
       if (allowedIds.length > 0) {
         submitDto.responses = submitDto.responses.filter((r) =>
           allowedIds.includes(r.fieldId),
         );
       }
-  
+
       // Required fields validation
       const isRestricted =
         (application.status === 'resubmission' ||
@@ -453,8 +453,9 @@ export class VisaProductFieldsService {
         adminAllowedIds.length > 0 ||
         requestedIds.length > 0 ||
         allowedIdsFromRequests.length > 0;
-        
+
       if (!isRestricted) {
+        // Not restricted: validate all required product fields
         const requiredFields = activeProductFields.filter((f) => f.isRequired === true);
         const providedFieldIds = submitDto.responses.map((r) => r.fieldId);
         const providedFieldIdsAsStrings = providedFieldIds.map((id) => String(id));
@@ -468,12 +469,38 @@ export class VisaProductFieldsService {
             `Missing required fields: ${missingRequiredFields.map((f) => f.question).join(', ')}`,
           );
         }
+      } else if (allowedIdsFromRequests.length > 0) {
+        // ✅ NEW: Validate required fields from resubmission requests (includes both product and admin fields)
+        const providedFieldIds = submitDto.responses.map((r) => r.fieldId);
+        const providedFieldIdsAsStrings = providedFieldIds.map((id) => String(id));
+
+        // Get all required fields from the allowed IDs (both product and admin)
+        const requiredFields: any[] = [];
+        allowedIdsFromRequests.forEach((fieldId) => {
+          const field = fieldMap.get(fieldId) || fieldMap.get(String(fieldId));
+          if (field && field.isRequired === true) {
+            requiredFields.push(field);
+          }
+        });
+
+        // Check if all required fields are provided
+        const missingRequiredFields = requiredFields.filter(
+          (field) =>
+            !providedFieldIds.includes(field.id) &&
+            !providedFieldIdsAsStrings.includes(String(field.id)),
+        );
+
+        if (missingRequiredFields.length > 0) {
+          throw new BadRequestException(
+            `Missing required fields: ${missingRequiredFields.map((f) => f.question).join(', ')}`,
+          );
+        }
       }
-  
+
       // Validate each response
       for (const response of submitDto.responses) {
         const field = fieldMap.get(response.fieldId) || fieldMap.get(String(response.fieldId));
-  
+
         if (field.fieldType === 'upload') {
           if (!response.filePath) {
             throw new BadRequestException(
@@ -486,7 +513,7 @@ export class VisaProductFieldsService {
               `Value is required for field: ${field.question}`,
             );
           }
-  
+
           if (field.fieldType === 'dropdown') {
             if (!field.options || !field.options.includes(response.value)) {
               throw new BadRequestException(
@@ -496,7 +523,7 @@ export class VisaProductFieldsService {
           }
         }
       }
-  
+
       // Build responses object
       const responses: Record<string, any> = {};
       for (const response of submitDto.responses) {
@@ -509,20 +536,20 @@ export class VisaProductFieldsService {
           submittedAt: new Date(),
         };
       }
-  
+
       // Store responses in the appropriate location
       if (submittedTravelerId) {
         // TRAVELER SUBMISSION
         const traveler = await this.travelerRepo.findOne({
           where: { id: submittedTravelerId, applicationId: submitDto.applicationId },
         });
-  
+
         if (!traveler) {
           throw new NotFoundException(
             `Traveler with ID ${submittedTravelerId} not found for this application`,
           );
         }
-  
+
         // Validate resubmission target (backward compatibility)
         if (
           (application.status === 'resubmission' ||
@@ -535,7 +562,7 @@ export class VisaProductFieldsService {
             `Resubmission is requested for traveler ID ${application.resubmissionTravelerId}. Please submit responses for that traveler.`,
           );
         }
-  
+
         // Initialize and merge responses
         if (!traveler.fieldResponses) {
           traveler.fieldResponses = {};
@@ -543,34 +570,34 @@ export class VisaProductFieldsService {
         traveler.fieldResponses = { ...traveler.fieldResponses, ...responses };
         traveler.notes = null as any;
         await this.travelerRepo.save(traveler);
-  
+
         // ✅ RE-FETCH APPLICATION
         const updatedApplication = await this.applicationRepo.findOne({
           where: { id: submitDto.applicationId },
           relations: ['visaProduct', 'travelers'],
         });
-        
+
         if (!updatedApplication) {
           throw new NotFoundException(
             `Application with ID ${submitDto.applicationId} not found`,
           );
         }
-        
+
         // ✅ NEW: Check and fulfill resubmission requests (Option B)
         if (updatedApplication.status === 'resubmission' && updatedApplication.resubmissionRequests) {
           const submittedFieldIds = Object.keys(responses).map(id => Number(id));
           let anyRequestFulfilled = false;
-          
+
           // Find and mark fulfilled requests for this traveler
           for (const request of updatedApplication.resubmissionRequests) {
             if (request.fulfilledAt) continue; // Skip already fulfilled
-            
+
             if (request.target === 'traveler' && request.travelerId === submittedTravelerId) {
               // Check if all requested fields were submitted
-              const allFieldsSubmitted = request.fieldIds.every(fieldId => 
+              const allFieldsSubmitted = request.fieldIds.every(fieldId =>
                 submittedFieldIds.includes(fieldId)
               );
-              
+
               if (allFieldsSubmitted) {
                 request.fulfilledAt = new Date().toISOString();
                 anyRequestFulfilled = true;
@@ -578,12 +605,12 @@ export class VisaProductFieldsService {
               }
             }
           }
-          
+
           // Check if ALL requests are now fulfilled
           const allRequestsFulfilled = updatedApplication.resubmissionRequests.every(
             (req) => req.fulfilledAt
           );
-          
+
           if (allRequestsFulfilled) {
             console.log('✅ All resubmission requests fulfilled, changing status to processing');
             updatedApplication.status = 'processing';
@@ -593,11 +620,11 @@ export class VisaProductFieldsService {
             updatedApplication.resubmissionTravelerId = null;
             updatedApplication.requestedFieldIds = null;
           }
-          
+
           await this.applicationRepo.save(updatedApplication);
-          
-        } else if (updatedApplication.status === 'resubmission' || 
-                   updatedApplication.status === 'Additional Info required') {
+
+        } else if (updatedApplication.status === 'resubmission' ||
+          updatedApplication.status === 'Additional Info required') {
           // ✅ BACKWARD COMPATIBILITY: Handle old single-request structure (Option A)
           updatedApplication.status = 'processing';
           updatedApplication.resubmissionTarget = null as any;
@@ -613,7 +640,7 @@ export class VisaProductFieldsService {
           }
           await this.applicationRepo.save(updatedApplication);
         }
-        
+
       } else {
         // APPLICATION-LEVEL SUBMISSION
         if (
@@ -623,7 +650,7 @@ export class VisaProductFieldsService {
         ) {
           application.fieldResponses = (application.fieldResponses as any).application || {};
         }
-  
+
         // Validate resubmission target (backward compatibility)
         if (
           (application.status === 'resubmission' ||
@@ -635,38 +662,38 @@ export class VisaProductFieldsService {
             `Resubmission is requested for traveler ID ${application.resubmissionTravelerId}. Please submit traveler-specific responses.`,
           );
         }
-  
+
         // Initialize and merge responses
         if (!application.fieldResponses) {
           application.fieldResponses = {};
         }
         application.fieldResponses = { ...application.fieldResponses, ...responses };
-        
+
         // ✅ NEW: Check and fulfill resubmission requests (Option B)
         if (application.status === 'resubmission' && application.resubmissionRequests) {
           const submittedFieldIds = Object.keys(responses).map(id => Number(id));
-          
+
           // Find and mark fulfilled requests for application
           for (const request of application.resubmissionRequests) {
             if (request.fulfilledAt) continue;
-            
+
             if (request.target === 'application') {
-              const allFieldsSubmitted = request.fieldIds.every(fieldId => 
+              const allFieldsSubmitted = request.fieldIds.every(fieldId =>
                 submittedFieldIds.includes(fieldId)
               );
-              
+
               if (allFieldsSubmitted) {
                 request.fulfilledAt = new Date().toISOString();
                 console.log(`✅ Resubmission request ${request.id} fulfilled for application`);
               }
             }
           }
-          
+
           // Check if ALL requests are fulfilled
           const allRequestsFulfilled = application.resubmissionRequests.every(
             (req) => req.fulfilledAt
           );
-          
+
           if (allRequestsFulfilled) {
             console.log('✅ All resubmission requests fulfilled, changing status to processing');
             application.status = 'processing';
@@ -676,9 +703,9 @@ export class VisaProductFieldsService {
             application.resubmissionTravelerId = null;
             application.requestedFieldIds = null;
           }
-          
-        } else if (application.status === 'resubmission' || 
-                   application.status === 'Additional Info required') {
+
+        } else if (application.status === 'resubmission' ||
+          application.status === 'Additional Info required') {
           // ✅ BACKWARD COMPATIBILITY: Handle old single-request structure
           application.status = 'processing';
           application.resubmissionTarget = null as any;
@@ -691,10 +718,10 @@ export class VisaProductFieldsService {
             );
           }
         }
-        
+
         await this.applicationRepo.save(application);
       }
-  
+
       return {
         status: true,
         message: submitDto.travelerId
@@ -769,7 +796,7 @@ export class VisaProductFieldsService {
         // Get application-level responses from VisaApplication entity
         // Handle backward compatibility: migrate old structure if needed
         let fieldResponses = application.fieldResponses || {};
-        
+
         if (
           fieldResponses &&
           typeof fieldResponses === 'object' &&
@@ -800,7 +827,7 @@ export class VisaProductFieldsService {
       // This ensures correct ordering and handles sequential indices
       const responseArray = fields.map((field, index) => {
         let response: any = null;
-        
+
         if (areSequentialIndices) {
           // WORKAROUND: If responses are stored with sequential indices, match by position
           // Response "1" maps to fields[0], "2" to fields[1], etc.
@@ -810,7 +837,7 @@ export class VisaProductFieldsService {
           // Normal case: Try to find response by field.id
           response = responseMap.get(field.id) || responseMap.get(String(field.id));
         }
-        
+
         if (response) {
           return {
             fieldId: field.id, // Always return actual field.id
@@ -851,13 +878,13 @@ export class VisaProductFieldsService {
         where: { id: applicationId },
         relations: ['visaProduct', 'travelers'],
       });
-  
+
       if (!application) {
         throw new NotFoundException(
           `Application with ID ${applicationId} not found`,
         );
       }
-  
+
       // If travelerId is provided, validate it belongs to this application
       if (travelerId) {
         const traveler = application.travelers?.find((t) => t.id === travelerId);
@@ -867,7 +894,7 @@ export class VisaProductFieldsService {
           );
         }
       }
-  
+
       // Determine if there are admin-only fields for this context
       const adminFieldsAll = Array.isArray(application.adminRequestedFields)
         ? application.adminRequestedFields
@@ -880,33 +907,33 @@ export class VisaProductFieldsService {
         // For application-level context, include fields without travelerId
         return !f.travelerId;
       });
-  
+
       // Get all active product fields for this visa product
       const productFields = (application.visaProduct.fields || []).filter(
         (f) => f.isActive !== false,
       );
-  
+
       // Get existing responses
       let responses: Record<string | number, any> = {};
-  
+
       if (travelerId) {
         // Get traveler-specific responses from Traveler entity
         const traveler = await this.travelerRepo.findOne({
           where: { id: travelerId, applicationId },
         });
-  
+
         if (!traveler) {
           throw new NotFoundException(
             `Traveler with ID ${travelerId} not found for this application`,
           );
         }
-  
+
         responses = traveler.fieldResponses || {};
       } else {
         // Get application-level responses from VisaApplication entity
         // Handle backward compatibility: migrate old structure if needed
         let fieldResponses = application.fieldResponses || {};
-        
+
         if (
           fieldResponses &&
           typeof fieldResponses === 'object' &&
@@ -915,102 +942,178 @@ export class VisaProductFieldsService {
           // Migrate from old nested structure to new flat structure
           fieldResponses = (fieldResponses as any).application || {};
         }
-  
+
         responses = fieldResponses || {};
       }
-  
+
       // Helper: determine resubmission state
       const isResubmissionState = application.status === 'resubmission';
-  
-      // If admin fields exist for this context, return ONLY those (not general product fields)
-      let combinedFields: any[] = [];
-      if (adminFieldsForContext.length > 0) {
-        combinedFields = adminFieldsForContext.map((field: any) => {
-          const response = responses[field.id] || responses[String(field.id)];
-          return {
-            ...field,
-            response: response
-              ? {
-                  value: response.value,
-                  filePath: response.filePath,
-                  fileName: response.fileName,
-                  fileSize: response.fileSize,
-                  submittedAt: response.submittedAt,
-                }
-              : null,
-            editable: true, // Admin requested fields are editable in additional info
-            source: 'admin',
-          };
-        });
-      } else {
-        // Return product fields with correct editability based on resubmission targeting
-        
-        // ✅ NEW LOGIC: Determine which fields should be editable
-        let requestedFieldIds: number[] = [];
-        
-        if (isResubmissionState) {
-          // Check resubmission targeting
-          if (!travelerId) {
-            // We're getting application-level fields
-            if (application.resubmissionTarget === 'application') {
-              // ✅ Resubmission targets application - use requested field IDs
-              requestedFieldIds = Array.isArray(application.requestedFieldIds) 
-                ? application.requestedFieldIds 
-                : [];
-            } else {
-              // ❌ Resubmission targets a traveler, but we're on application tab
-              // All fields should be disabled
-              requestedFieldIds = [];
-            }
+
+      // ✅ NEW: Get field IDs from resubmission requests (Option B - supports both product and admin fields)
+      let requestedFieldIdsFromRequests: number[] = [];
+      if (isResubmissionState && application.resubmissionRequests) {
+        const relevantRequests = application.resubmissionRequests.filter((req) => {
+          if (req.fulfilledAt) return false; // Skip fulfilled requests
+
+          if (travelerId) {
+            // For traveler context
+            return req.target === 'traveler' && req.travelerId === travelerId;
           } else {
-            // We're getting traveler-level fields
-            if (
-              application.resubmissionTarget === 'traveler' &&
-              Number(application.resubmissionTravelerId) === Number(travelerId)
-            ) {
-              // ✅ This is the targeted traveler - use requested field IDs
-              requestedFieldIds = Array.isArray(application.requestedFieldIds) 
-                ? application.requestedFieldIds 
-                : [];
-            } else {
-              // ❌ This is NOT the targeted traveler (or target is application)
-              // All fields should be disabled
-              requestedFieldIds = [];
-            }
+            // For application context
+            return req.target === 'application';
           }
-        }
-  
-        combinedFields = productFields.map((field) => {
-          const response = responses[field.id] || responses[String(field.id)];
-          
-          // Determine if field is editable
-          let editable = true; // Default: editable
-          
-          if (isResubmissionState) {
-            // During resubmission, only requested fields are editable
-            editable = requestedFieldIds.includes(field.id);
-          }
-          
-          return {
-            ...field,
-            response: response
-              ? {
-                  value: response.value,
-                  filePath: response.filePath,
-                  fileName: response.fileName,
-                  fileSize: response.fileSize,
-                  submittedAt: response.submittedAt,
-                }
-              : null,
-            editable,
-            source: 'product',
-          };
+        });
+
+        // Collect all field IDs from relevant requests (includes both positive and negative IDs)
+        relevantRequests.forEach((req) => {
+          requestedFieldIdsFromRequests.push(...req.fieldIds);
         });
       }
-  
+
+      // ✅ NEW LOGIC: Build combined fields from both product fields and admin fields
+      // During resubmission, only show fields that are in the resubmission request
+      let combinedFields: any[] = [];
+
+      // 1. Add product fields (positive IDs)
+      if (requestedFieldIdsFromRequests.length > 0) {
+        // During resubmission: only show requested product fields
+        const requestedProductFields = productFields.filter((field) =>
+          requestedFieldIdsFromRequests.includes(field.id)
+        );
+        combinedFields.push(...requestedProductFields.map((field) => {
+          const response = responses[field.id] || responses[String(field.id)];
+          return {
+            ...field,
+            response: response
+              ? {
+                value: response.value,
+                filePath: response.filePath,
+                fileName: response.fileName,
+                fileSize: response.fileSize,
+                submittedAt: response.submittedAt,
+              }
+              : null,
+            editable: true, // Requested fields are always editable
+            source: 'product',
+          };
+        }));
+      } else if (!isResubmissionState) {
+        // Not in resubmission: show all product fields
+        combinedFields.push(...productFields.map((field) => {
+          const response = responses[field.id] || responses[String(field.id)];
+          return {
+            ...field,
+            response: response
+              ? {
+                value: response.value,
+                filePath: response.filePath,
+                fileName: response.fileName,
+                fileSize: response.fileSize,
+                submittedAt: response.submittedAt,
+              }
+              : null,
+            editable: true,
+            source: 'product',
+          };
+        }));
+      }
+
+      // 2. Add admin fields (negative IDs)
+      if (requestedFieldIdsFromRequests.length > 0) {
+        // During resubmission: only show requested admin fields
+        const requestedAdminFields = adminFieldsForContext.filter((field: any) =>
+          requestedFieldIdsFromRequests.includes(field.id)
+        );
+        combinedFields.push(...requestedAdminFields.map((field: any) => {
+          const response = responses[field.id] || responses[String(field.id)];
+          return {
+            ...field,
+            response: response
+              ? {
+                value: response.value,
+                filePath: response.filePath,
+                fileName: response.fileName,
+                fileSize: response.fileSize,
+                submittedAt: response.submittedAt,
+              }
+              : null,
+            editable: true, // Requested fields are always editable
+            source: 'admin',
+          };
+        }));
+      } else if (adminFieldsForContext.length > 0 && !isResubmissionState) {
+        // Not in resubmission but admin fields exist: show all admin fields
+        combinedFields.push(...adminFieldsForContext.map((field: any) => {
+          const response = responses[field.id] || responses[String(field.id)];
+          return {
+            ...field,
+            response: response
+              ? {
+                value: response.value,
+                filePath: response.filePath,
+                fileName: response.fileName,
+                fileSize: response.fileSize,
+                submittedAt: response.submittedAt,
+              }
+              : null,
+            editable: true,
+            source: 'admin',
+          };
+        }));
+      }
+
+      // ✅ BACKWARD COMPATIBILITY: Handle old resubmission system (Option A)
+      if (isResubmissionState && requestedFieldIdsFromRequests.length === 0) {
+        // Old system: use resubmissionTarget and requestedFieldIds
+        let requestedFieldIds: number[] = [];
+
+        if (!travelerId) {
+          // We're getting application-level fields
+          if (application.resubmissionTarget === 'application') {
+            requestedFieldIds = Array.isArray(application.requestedFieldIds)
+              ? application.requestedFieldIds
+              : [];
+          }
+        } else {
+          // We're getting traveler-level fields
+          if (
+            application.resubmissionTarget === 'traveler' &&
+            Number(application.resubmissionTravelerId) === Number(travelerId)
+          ) {
+            requestedFieldIds = Array.isArray(application.requestedFieldIds)
+              ? application.requestedFieldIds
+              : [];
+          }
+        }
+
+        if (requestedFieldIds.length > 0) {
+          // Show only requested product fields
+          const requestedProductFields = productFields.filter((field) =>
+            requestedFieldIds.includes(field.id)
+          );
+          combinedFields = requestedProductFields.map((field) => {
+            const response = responses[field.id] || responses[String(field.id)];
+            return {
+              ...field,
+              response: response
+                ? {
+                  value: response.value,
+                  filePath: response.filePath,
+                  fileName: response.fileName,
+                  fileSize: response.fileSize,
+                  submittedAt: response.submittedAt,
+                }
+                : null,
+              editable: true,
+              source: 'product',
+            };
+          });
+        }
+      }
+
       // Sort by displayOrder
       combinedFields.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-  
+
       return {
         status: true,
         message: travelerId
@@ -1031,12 +1134,93 @@ export class VisaProductFieldsService {
 
   /**
    * Validate file upload against field constraints
+   * Supports both product fields (positive IDs) and admin-requested fields (negative IDs)
    */
   async validateFileUpload(
     fieldId: number,
     file: Express.Multer.File,
+    applicationId?: number,
   ): Promise<void> {
-    // Find the field across all products
+    // ✅ NEW: Check if this is an admin-requested field (negative ID)
+    if (fieldId < 0 && applicationId) {
+      const application = await this.applicationRepo.findOne({
+        where: { id: applicationId },
+      });
+
+      if (!application) {
+        throw new NotFoundException(
+          `Application with ID ${applicationId} not found`,
+        );
+      }
+
+      // Look for the field in adminRequestedFields
+      const adminFields = application.adminRequestedFields || [];
+      const field = adminFields.find((f: any) => f.id === fieldId);
+
+      if (field) {
+        if (field.fieldType !== 'upload') {
+          throw new BadRequestException(
+            `Field ${fieldId} is not an upload field`,
+          );
+        }
+
+        if (field.isActive === false) {
+          throw new BadRequestException(`Field ${fieldId} is not active`);
+        }
+
+        // Validate file type if specified
+        if (field.allowedFileTypes && field.allowedFileTypes.length > 0) {
+          const fileExtension = file.originalname.split('.').pop()?.toLowerCase() || '';
+          const fileMimeType = file.mimetype.toLowerCase();
+
+          // Normalize allowed types: handle both extensions ('pdf', 'jpg') and MIME types ('application/pdf', 'image/jpeg')
+          const normalizedAllowedTypes = field.allowedFileTypes.map((type: string) => {
+            const normalized = type.toLowerCase().trim();
+            // If it's a MIME type, extract extension
+            if (normalized.includes('/')) {
+              // Map common MIME types to extensions
+              const mimeToExt: Record<string, string> = {
+                'application/pdf': 'pdf',
+                'image/jpeg': 'jpg',
+                'image/jpg': 'jpg',
+                'image/png': 'png',
+                'image/gif': 'gif',
+                'application/msword': 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+              };
+              return mimeToExt[normalized] || normalized.split('/')[1];
+            }
+            return normalized;
+          });
+
+          // Check if file extension or MIME type matches
+          const extensionMatches = normalizedAllowedTypes.includes(fileExtension);
+          const mimeMatches = field.allowedFileTypes.some((type: string) =>
+            fileMimeType.includes(type.toLowerCase())
+          );
+
+          if (!extensionMatches && !mimeMatches) {
+            throw new BadRequestException(
+              `File type ${fileExtension || fileMimeType} is not allowed. Allowed types: ${field.allowedFileTypes.join(', ')}`,
+            );
+          }
+        }
+
+        // Validate file size if specified (convert MB to bytes)
+        if (field.maxFileSizeMB) {
+          const maxSizeBytes = field.maxFileSizeMB * 1024 * 1024;
+          if (file.size > maxSizeBytes) {
+            throw new BadRequestException(
+              `File size exceeds maximum allowed size of ${field.maxFileSizeMB}MB`,
+            );
+          }
+        }
+
+        return; // Admin field found and validated
+      }
+    }
+
+    // Check product fields (positive IDs or if no applicationId provided)
     const visaProducts = await this.visaProductRepo.find();
 
     for (const product of visaProducts) {
@@ -1056,9 +1240,38 @@ export class VisaProductFieldsService {
 
         // Validate file type if specified
         if (field.allowedFileTypes && field.allowedFileTypes.length > 0) {
-          if (!field.allowedFileTypes.includes(file.mimetype)) {
+          const fileExtension = file.originalname.split('.').pop()?.toLowerCase() || '';
+          const fileMimeType = file.mimetype.toLowerCase();
+
+          // Normalize allowed types: handle both extensions ('pdf', 'jpg') and MIME types ('application/pdf', 'image/jpeg')
+          const normalizedAllowedTypes = field.allowedFileTypes.map((type: string) => {
+            const normalized = type.toLowerCase().trim();
+            // If it's a MIME type, extract extension
+            if (normalized.includes('/')) {
+              // Map common MIME types to extensions
+              const mimeToExt: Record<string, string> = {
+                'application/pdf': 'pdf',
+                'image/jpeg': 'jpg',
+                'image/jpg': 'jpg',
+                'image/png': 'png',
+                'image/gif': 'gif',
+                'application/msword': 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+              };
+              return mimeToExt[normalized] || normalized.split('/')[1];
+            }
+            return normalized;
+          });
+
+          // Check if file extension or MIME type matches
+          const extensionMatches = normalizedAllowedTypes.includes(fileExtension);
+          const mimeMatches = field.allowedFileTypes.some((type: string) =>
+            fileMimeType.includes(type.toLowerCase())
+          );
+
+          if (!extensionMatches && !mimeMatches) {
             throw new BadRequestException(
-              `File type ${file.mimetype} is not allowed. Allowed types: ${field.allowedFileTypes.join(', ')}`,
+              `File type ${fileExtension || fileMimeType} is not allowed. Allowed types: ${field.allowedFileTypes.join(', ')}`,
             );
           }
         }
@@ -1073,7 +1286,7 @@ export class VisaProductFieldsService {
           }
         }
 
-        return; // Field found and validated
+        return; // Product field found and validated
       }
     }
 

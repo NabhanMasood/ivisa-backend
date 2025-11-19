@@ -3,13 +3,15 @@ import { Request, Response, NextFunction } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as jwt from 'jsonwebtoken';
-import { Admin } from '../entities/admin.entity';
+import { Admin, AdminPermissions } from '../entities/admin.entity';
 
 // Extend Express Request to include admin property
 declare global {
   namespace Express {
     interface Request {
       admin?: Admin;
+      adminRole?: 'superadmin' | 'subadmin';
+      adminPermissions?: AdminPermissions;
     }
   }
 }
@@ -34,7 +36,7 @@ export class AuthMiddleware implements NestMiddleware {
       const decoded = jwt.verify(
         token,
         process.env.JWT_SECRET || 'SECRET_KEY',
-      ) as { id: number; email: string };
+      ) as { id: number; email: string; role?: string; permissions?: AdminPermissions };
 
       // Fetch admin from database
       const admin = await this.adminRepo.findOne({ 
@@ -45,8 +47,10 @@ export class AuthMiddleware implements NestMiddleware {
         throw new UnauthorizedException('Admin not found');
       }
 
-      // Attach admin to request object
+      // Attach admin, role, and permissions to request object
       req.admin = admin;
+      req.adminRole = admin.role;
+      req.adminPermissions = admin.permissions;
 
       next();
     } catch (error) {

@@ -17,6 +17,7 @@ import { ProcessingOptionsModule } from './processing-options/processing-options
 import { StripeModule } from './stripe/stripe.module';
 import { CardInfoModule } from './card-info/card-info.module';
 import { CommonModule } from './common/common.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -25,6 +26,8 @@ import { CommonModule } from './common/common.module';
       isGlobal: true,
       envFilePath: '.env', // ensures it reads from your local .env
     }),
+
+    CommonModule,
 
     CommonModule,
 
@@ -50,6 +53,7 @@ import { CommonModule } from './common/common.module';
           console.log(`Connecting to database: ${url.hostname}:${url.port}/${url.pathname.slice(1)}`);
           return config;
         }
+
 
         // Fall back to individual environment variables
         return {
@@ -82,6 +86,7 @@ import { CommonModule } from './common/common.module';
     StripeModule,
     CardInfoModule,
     ProcessingOptionsModule,
+    EmailModule,
   ], controllers: [AppController],
   providers: [AppService],
 })

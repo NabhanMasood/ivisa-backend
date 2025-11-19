@@ -81,7 +81,8 @@ export class VisaProductFieldsController {
 
   /**
    * Upload a file for a form field
-   * @param fieldId - Optional field ID to validate against field constraints
+   * @param fieldId - Field ID to validate against field constraints (can be positive for product fields or negative for admin fields)
+   * @param applicationId - Application ID (required for negative field IDs to look up admin-requested fields)
    */
   @Post('upload')
   @UseInterceptors(
@@ -95,6 +96,7 @@ export class VisaProductFieldsController {
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Query('fieldId') fieldId?: string,
+    @Query('applicationId') applicationId?: string,
   ) {
     if (!file) {
       throw new BadRequestException('No file provided');
@@ -107,9 +109,19 @@ export class VisaProductFieldsController {
         if (isNaN(fieldIdNum)) {
           throw new BadRequestException('Invalid fieldId');
         }
+
+        // ✅ NEW: For negative field IDs (admin fields), applicationId is required
+        const applicationIdNum = applicationId ? parseInt(applicationId, 10) : undefined;
+        if (fieldIdNum < 0 && !applicationIdNum) {
+          throw new BadRequestException(
+            'applicationId is required for admin-requested fields (negative field IDs)',
+          );
+        }
+
         await this.visaProductFieldsService.validateFileUpload(
           fieldIdNum,
           file,
+          applicationIdNum,
         );
       }
 
