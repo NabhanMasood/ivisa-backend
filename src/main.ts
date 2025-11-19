@@ -32,7 +32,7 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
-  // Add request logging middleware
+  // Add request logging middlewaree
   app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
