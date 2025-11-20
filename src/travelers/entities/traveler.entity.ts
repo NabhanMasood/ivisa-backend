@@ -33,10 +33,10 @@ export class Traveler {
 
   @Column({ type: 'varchar', nullable: true }) // Explicitly specify type as varchar
   email: string;
-  
+
   @Column({ type: 'date' })
   dateOfBirth: Date;
-  
+
   // Passport Details (Step 3 - PassportDetailsForm.vue)
   @Column({ nullable: true })
   passportNationality: string;
@@ -52,6 +52,9 @@ export class Traveler {
 
   @Column({ default: false })
   hasSchengenVisa: boolean;
+
+  @Column({ default: false })
+  receiveUpdates: boolean;
 
   // Optional: Additional fields for future enhancements
   @Column({ nullable: true })

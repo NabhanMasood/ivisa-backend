@@ -25,6 +25,10 @@ export class CreateVisaApplicationDto {
   @IsNotEmpty({ message: 'Destination country is required' })
   destinationCountry: string; // e.g., "Morocco"
 
+  @IsNumber()
+  @IsOptional()
+  embassyId?: number; // Optional embassy selection
+
   @IsString()
   @IsNotEmpty({ message: 'Visa type is required' })
   @Matches(/^\d+-(single|multiple)$/, {

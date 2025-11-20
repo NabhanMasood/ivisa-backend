@@ -23,6 +23,29 @@ export class AuthService {
     private configService: ConfigService,
   ) { }
 
+  /**
+   * Resolve admin panel URL from environment variables.
+   * Throws if neither ADMIN_PANEL_URL nor FRONTEND_URL is configured.
+   */
+  private getAdminPanelUrl(): string {
+    const adminPanelUrlEnv = this.configService.get<string>('ADMIN_PANEL_URL');
+    const frontendUrlEnv = this.configService.get<string>('FRONTEND_URL');
+
+    if (adminPanelUrlEnv) {
+      return adminPanelUrlEnv.endsWith('/admin/login')
+        ? adminPanelUrlEnv
+        : `${adminPanelUrlEnv}/admin/login`;
+    }
+
+    if (frontendUrlEnv) {
+      return `${frontendUrlEnv.replace(/\/$/, '')}/admin/login`;
+    }
+
+    throw new Error(
+      'ADMIN_PANEL_URL or FRONTEND_URL must be set in environment variables to send subadmin emails.',
+    );
+  }
+
   // ==================== CUSTOMER AUTH ====================
   async customerRegister(dto: RegisterDto) {
     const { fullName, email, password } = dto;
@@ -43,6 +66,7 @@ export class AuthService {
       existingCustomer.fullname = fullName;
       existingCustomer.status = 'Active';
       existingCustomer.role = 'customer';
+
 
       const updatedCustomer = await this.customerRepo.save(existingCustomer);
 
@@ -70,6 +94,7 @@ export class AuthService {
     // Create new customer
     const hashedPassword = await bcrypt.hash(password, 10);
 
+
     const customer = this.customerRepo.create({
       fullname: fullName,
       email,
@@ -90,6 +115,19 @@ export class AuthService {
       process.env.JWT_SECRET || 'SECRET_KEY',
       { expiresIn: '7d' },
     );
+
+    // Send welcome email (asynchronously)
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    if (frontendUrl && savedCustomer.email) {
+      const loginUrl = `${frontendUrl.replace(/\/$/, '')}/login`;
+      this.emailService.sendCustomerWelcomeEmail(
+        savedCustomer.email,
+        savedCustomer.fullname,
+        loginUrl,
+      ).catch(error => {
+        console.error('Failed to send welcome email:', error);
+      });
+    }
 
     const { password: _, ...customerWithoutPassword } = savedCustomer;
 
@@ -305,9 +343,7 @@ export class AuthService {
 
     const savedSubadmin = await this.adminRepo.save(subadmin);
 
-    // Send welcome email with credentials to the new subadmin
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    const adminPanelUrl = `${frontendUrl}/admin/login`;
+    const adminPanelUrl = this.getAdminPanelUrl();
 
     // Send email asynchronously (don't wait for it to complete)
     this.emailService.sendSubadminWelcomeEmail(

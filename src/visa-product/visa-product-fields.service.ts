@@ -5,12 +5,14 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { VisaProduct } from './entities/visa-product.entity';
 import { VisaApplication } from '../visa-applications/entities/visa-application.entity';
 import { Traveler } from '../travelers/entities/traveler.entity';
 import { CreateVisaProductFieldDto } from './dto/create-visa-product-field.dto';
 import { UpdateVisaProductFieldDto } from './dto/update-visa-product-field.dto';
 import { SubmitFieldResponseDto } from './dto/submit-field-response.dto';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class VisaProductFieldsService {
@@ -21,7 +23,20 @@ export class VisaProductFieldsService {
     private applicationRepo: Repository<VisaApplication>,
     @InjectRepository(Traveler)
     private travelerRepo: Repository<Traveler>,
+    private emailService: EmailService,
+    private configService: ConfigService,
   ) { }
+
+  /**
+   * Resolve the public frontend URL from environment variables.
+   */
+  private getFrontendUrl(): string {
+    const url = this.configService.get<string>('FRONTEND_URL');
+    if (!url) {
+      return 'https://yourapp.com'; // Fallback URL
+    }
+    return url.replace(/\/$/, '');
+  }
 
   /**
    * Create a new custom field for a visa product (Admin only)
@@ -58,6 +73,7 @@ export class VisaProductFieldsService {
       const fieldsMaxId = fields.length > 0 ? Math.max(...fields.map((f) => f.id || 0)) : 0;
       const maxId = Math.max(currentMaxId, fieldsMaxId);
       const newFieldId = maxId + 1;
+
 
       // Update the maxFieldId counter
       visaProduct.maxFieldId = newFieldId;
@@ -316,8 +332,9 @@ export class VisaProductFieldsService {
       // Validate application exists
       const application = await this.applicationRepo.findOne({
         where: { id: submitDto.applicationId },
-        relations: ['visaProduct', 'travelers'],
+        relations: ['visaProduct', 'travelers', 'customer'],
       });
+
 
       if (!application) {
         throw new NotFoundException(
@@ -325,11 +342,13 @@ export class VisaProductFieldsService {
         );
       }
 
+
       // Normalize travelerId to number for safe comparison
       const submittedTravelerId =
         submitDto.travelerId !== undefined && submitDto.travelerId !== null
           ? Number(submitDto.travelerId)
           : undefined;
+
 
       // If travelerId is provided, validate that the traveler belongs to this application
       if (submittedTravelerId) {
@@ -343,9 +362,11 @@ export class VisaProductFieldsService {
         }
       }
 
+
       // Build available fields set: product fields + admin fields for this context
       const productFieldsAll = application.visaProduct.fields || [];
       const activeProductFields = productFieldsAll.filter((f) => f.isActive !== false);
+
 
       const adminFieldsAll = Array.isArray(application.adminRequestedFields)
         ? application.adminRequestedFields
@@ -353,6 +374,7 @@ export class VisaProductFieldsService {
       const adminFieldsForContext = submitDto.travelerId
         ? adminFieldsAll.filter((f: any) => f.travelerId === submitDto.travelerId)
         : adminFieldsAll.filter((f: any) => !f.travelerId);
+
 
       // Create field map for quick lookup (support both number and string keys)
       const fieldMap = new Map<number | string, any>();
@@ -367,11 +389,13 @@ export class VisaProductFieldsService {
         fieldMap.set(String(f.id), f);
       });
 
+
       // ✅ NEW: Determine allowed field IDs from resubmissionRequests (Option B)
       let allowedIdsFromRequests: number[] = [];
       if (application.status === 'resubmission' && application.resubmissionRequests) {
         const relevantRequests = application.resubmissionRequests.filter((req) => {
           if (req.fulfilledAt) return false; // Skip fulfilled requests
+
 
           if (submittedTravelerId) {
             // For traveler submissions
@@ -382,11 +406,13 @@ export class VisaProductFieldsService {
           }
         });
 
+
         // Collect all field IDs from relevant requests
         relevantRequests.forEach((req) => {
           allowedIdsFromRequests.push(...req.fieldIds);
         });
       }
+
 
       // Determine allowed field IDs for this submission
       // Priority: 
@@ -406,10 +432,12 @@ export class VisaProductFieldsService {
           ? requestedIdsForTraveler
           : requestedIdsApp) || [];
 
+
       const defaultAllowedIds = activeProductFields.map((f) => f.id);
       const isResubmissionPhase =
         application.status === 'resubmission' ||
         application.status === 'Additional Info required';
+
 
       const allowedIds: Array<number> =
         allowedIdsFromRequests.length > 0
@@ -422,6 +450,7 @@ export class VisaProductFieldsService {
                 ? [] // In resubmission without explicit requests, accept none
                 : defaultAllowedIds; // Priority 4
 
+
       // Validate all provided field IDs exist
       const invalidFieldIds: number[] = [];
       for (const response of submitDto.responses) {
@@ -431,6 +460,7 @@ export class VisaProductFieldsService {
         }
       }
 
+
       if (invalidFieldIds.length > 0) {
         throw new BadRequestException(
           `Invalid field IDs provided: ${invalidFieldIds.join(', ')}. ` +
@@ -439,12 +469,14 @@ export class VisaProductFieldsService {
         );
       }
 
+
       // Filter out non-requested fields (when a restriction exists)
       if (allowedIds.length > 0) {
         submitDto.responses = submitDto.responses.filter((r) =>
           allowedIds.includes(r.fieldId),
         );
       }
+
 
       // Required fields validation
       const isRestricted =
@@ -453,6 +485,7 @@ export class VisaProductFieldsService {
         adminAllowedIds.length > 0 ||
         requestedIds.length > 0 ||
         allowedIdsFromRequests.length > 0;
+
 
       if (!isRestricted) {
         // Not restricted: validate all required product fields
@@ -497,9 +530,11 @@ export class VisaProductFieldsService {
         }
       }
 
+
       // Validate each response
       for (const response of submitDto.responses) {
         const field = fieldMap.get(response.fieldId) || fieldMap.get(String(response.fieldId));
+
 
         if (field.fieldType === 'upload') {
           if (!response.filePath) {
@@ -514,6 +549,7 @@ export class VisaProductFieldsService {
             );
           }
 
+
           if (field.fieldType === 'dropdown') {
             if (!field.options || !field.options.includes(response.value)) {
               throw new BadRequestException(
@@ -523,6 +559,7 @@ export class VisaProductFieldsService {
           }
         }
       }
+
 
       // Build responses object
       const responses: Record<string, any> = {};
@@ -537,6 +574,7 @@ export class VisaProductFieldsService {
         };
       }
 
+
       // Store responses in the appropriate location
       if (submittedTravelerId) {
         // TRAVELER SUBMISSION
@@ -544,11 +582,13 @@ export class VisaProductFieldsService {
           where: { id: submittedTravelerId, applicationId: submitDto.applicationId },
         });
 
+
         if (!traveler) {
           throw new NotFoundException(
             `Traveler with ID ${submittedTravelerId} not found for this application`,
           );
         }
+
 
         // Validate resubmission target (backward compatibility)
         if (
@@ -563,6 +603,7 @@ export class VisaProductFieldsService {
           );
         }
 
+
         // Initialize and merge responses
         if (!traveler.fieldResponses) {
           traveler.fieldResponses = {};
@@ -571,11 +612,13 @@ export class VisaProductFieldsService {
         traveler.notes = null as any;
         await this.travelerRepo.save(traveler);
 
+
         // ✅ RE-FETCH APPLICATION
         const updatedApplication = await this.applicationRepo.findOne({
           where: { id: submitDto.applicationId },
-          relations: ['visaProduct', 'travelers'],
+          relations: ['visaProduct', 'travelers', 'customer'],
         });
+
 
         if (!updatedApplication) {
           throw new NotFoundException(
@@ -583,20 +626,24 @@ export class VisaProductFieldsService {
           );
         }
 
+
         // ✅ NEW: Check and fulfill resubmission requests (Option B)
         if (updatedApplication.status === 'resubmission' && updatedApplication.resubmissionRequests) {
           const submittedFieldIds = Object.keys(responses).map(id => Number(id));
           let anyRequestFulfilled = false;
 
+
           // Find and mark fulfilled requests for this traveler
           for (const request of updatedApplication.resubmissionRequests) {
             if (request.fulfilledAt) continue; // Skip already fulfilled
+
 
             if (request.target === 'traveler' && request.travelerId === submittedTravelerId) {
               // Check if all requested fields were submitted
               const allFieldsSubmitted = request.fieldIds.every(fieldId =>
                 submittedFieldIds.includes(fieldId)
               );
+
 
               if (allFieldsSubmitted) {
                 request.fulfilledAt = new Date().toISOString();
@@ -606,10 +653,12 @@ export class VisaProductFieldsService {
             }
           }
 
+
           // Check if ALL requests are now fulfilled
           const allRequestsFulfilled = updatedApplication.resubmissionRequests.every(
             (req) => req.fulfilledAt
           );
+
 
           if (allRequestsFulfilled) {
             console.log('✅ All resubmission requests fulfilled, changing status to processing');
@@ -621,11 +670,34 @@ export class VisaProductFieldsService {
             updatedApplication.requestedFieldIds = null;
           }
 
+
           await this.applicationRepo.save(updatedApplication);
+
+          // Send email confirmation when status changes to processing
+          if (allRequestsFulfilled) {
+            // Re-fetch with customer relation
+            const appWithCustomer = await this.applicationRepo.findOne({
+              where: { id: updatedApplication.id },
+              relations: ['customer'],
+            });
+            if (appWithCustomer?.customer?.email) {
+              const frontendUrl = this.getFrontendUrl();
+              const trackingUrl = `${frontendUrl}/track/${appWithCustomer.applicationNumber}`;
+              this.emailService.sendDocumentSubmissionEmail(
+                appWithCustomer.customer.email,
+                appWithCustomer.customer.fullname,
+                appWithCustomer.applicationNumber,
+                trackingUrl,
+              ).catch(error => {
+                console.error('Failed to send document submission email:', error);
+              });
+            }
+          }
 
         } else if (updatedApplication.status === 'resubmission' ||
           updatedApplication.status === 'Additional Info required') {
           // ✅ BACKWARD COMPATIBILITY: Handle old single-request structure (Option A)
+          const previousStatus = updatedApplication.status;
           updatedApplication.status = 'processing';
           updatedApplication.resubmissionTarget = null as any;
           updatedApplication.resubmissionTravelerId = null as any;
@@ -639,7 +711,29 @@ export class VisaProductFieldsService {
             );
           }
           await this.applicationRepo.save(updatedApplication);
+
+          // Send email confirmation when customer submits additional info
+          if (previousStatus === 'Additional Info required') {
+            // Re-fetch with customer relation
+            const appWithCustomer = await this.applicationRepo.findOne({
+              where: { id: updatedApplication.id },
+              relations: ['customer'],
+            });
+            if (appWithCustomer?.customer?.email) {
+              const frontendUrl = this.getFrontendUrl();
+              const trackingUrl = `${frontendUrl}/track/${appWithCustomer.applicationNumber}`;
+              this.emailService.sendDocumentSubmissionEmail(
+                appWithCustomer.customer.email,
+                appWithCustomer.customer.fullname,
+                appWithCustomer.applicationNumber,
+                trackingUrl,
+              ).catch(error => {
+                console.error('Failed to send document submission email:', error);
+              });
+            }
+          }
         }
+
 
       } else {
         // APPLICATION-LEVEL SUBMISSION
@@ -650,6 +744,7 @@ export class VisaProductFieldsService {
         ) {
           application.fieldResponses = (application.fieldResponses as any).application || {};
         }
+
 
         // Validate resubmission target (backward compatibility)
         if (
@@ -663,24 +758,29 @@ export class VisaProductFieldsService {
           );
         }
 
+
         // Initialize and merge responses
         if (!application.fieldResponses) {
           application.fieldResponses = {};
         }
         application.fieldResponses = { ...application.fieldResponses, ...responses };
 
+
         // ✅ NEW: Check and fulfill resubmission requests (Option B)
         if (application.status === 'resubmission' && application.resubmissionRequests) {
           const submittedFieldIds = Object.keys(responses).map(id => Number(id));
+
 
           // Find and mark fulfilled requests for application
           for (const request of application.resubmissionRequests) {
             if (request.fulfilledAt) continue;
 
+
             if (request.target === 'application') {
               const allFieldsSubmitted = request.fieldIds.every(fieldId =>
                 submittedFieldIds.includes(fieldId)
               );
+
 
               if (allFieldsSubmitted) {
                 request.fulfilledAt = new Date().toISOString();
@@ -689,10 +789,12 @@ export class VisaProductFieldsService {
             }
           }
 
+
           // Check if ALL requests are fulfilled
           const allRequestsFulfilled = application.resubmissionRequests.every(
             (req) => req.fulfilledAt
           );
+
 
           if (allRequestsFulfilled) {
             console.log('✅ All resubmission requests fulfilled, changing status to processing');
@@ -707,6 +809,7 @@ export class VisaProductFieldsService {
         } else if (application.status === 'resubmission' ||
           application.status === 'Additional Info required') {
           // ✅ BACKWARD COMPATIBILITY: Handle old single-request structure
+          const previousStatus = application.status;
           application.status = 'processing';
           application.resubmissionTarget = null as any;
           application.resubmissionTravelerId = null as any;
@@ -717,10 +820,34 @@ export class VisaProductFieldsService {
               (f: any) => !!f.travelerId,
             );
           }
-        }
+          await this.applicationRepo.save(application);
 
-        await this.applicationRepo.save(application);
+          // Send email confirmation when customer submits additional info
+          if (previousStatus === 'Additional Info required' && application.customer?.email) {
+            // Re-fetch application with customer relation
+            const applicationWithCustomer = await this.applicationRepo.findOne({
+              where: { id: application.id },
+              relations: ['customer'],
+            });
+
+            if (applicationWithCustomer?.customer?.email) {
+              const frontendUrl = this.getFrontendUrl();
+              const trackingUrl = `${frontendUrl}/track/${applicationWithCustomer.applicationNumber}`;
+              this.emailService.sendDocumentSubmissionEmail(
+                applicationWithCustomer.customer.email,
+                applicationWithCustomer.customer.fullname,
+                applicationWithCustomer.applicationNumber,
+                trackingUrl,
+              ).catch(error => {
+                console.error('Failed to send document submission email:', error);
+              });
+            }
+          }
+        } else {
+          await this.applicationRepo.save(application);
+        }
       }
+
 
       return {
         status: true,
@@ -797,6 +924,7 @@ export class VisaProductFieldsService {
         // Handle backward compatibility: migrate old structure if needed
         let fieldResponses = application.fieldResponses || {};
 
+
         if (
           fieldResponses &&
           typeof fieldResponses === 'object' &&
@@ -828,6 +956,7 @@ export class VisaProductFieldsService {
       const responseArray = fields.map((field, index) => {
         let response: any = null;
 
+
         if (areSequentialIndices) {
           // WORKAROUND: If responses are stored with sequential indices, match by position
           // Response "1" maps to fields[0], "2" to fields[1], etc.
@@ -837,6 +966,7 @@ export class VisaProductFieldsService {
           // Normal case: Try to find response by field.id
           response = responseMap.get(field.id) || responseMap.get(String(field.id));
         }
+
 
         if (response) {
           return {
@@ -879,11 +1009,13 @@ export class VisaProductFieldsService {
         relations: ['visaProduct', 'travelers'],
       });
 
+
       if (!application) {
         throw new NotFoundException(
           `Application with ID ${applicationId} not found`,
         );
       }
+
 
       // If travelerId is provided, validate it belongs to this application
       if (travelerId) {
@@ -894,6 +1026,7 @@ export class VisaProductFieldsService {
           );
         }
       }
+
 
       // Determine if there are admin-only fields for this context
       const adminFieldsAll = Array.isArray(application.adminRequestedFields)
@@ -908,13 +1041,16 @@ export class VisaProductFieldsService {
         return !f.travelerId;
       });
 
+
       // Get all active product fields for this visa product
       const productFields = (application.visaProduct.fields || []).filter(
         (f) => f.isActive !== false,
       );
 
+
       // Get existing responses
       let responses: Record<string | number, any> = {};
+
 
       if (travelerId) {
         // Get traveler-specific responses from Traveler entity
@@ -922,17 +1058,20 @@ export class VisaProductFieldsService {
           where: { id: travelerId, applicationId },
         });
 
+
         if (!traveler) {
           throw new NotFoundException(
             `Traveler with ID ${travelerId} not found for this application`,
           );
         }
 
+
         responses = traveler.fieldResponses || {};
       } else {
         // Get application-level responses from VisaApplication entity
         // Handle backward compatibility: migrate old structure if needed
         let fieldResponses = application.fieldResponses || {};
+
 
         if (
           fieldResponses &&
@@ -943,11 +1082,14 @@ export class VisaProductFieldsService {
           fieldResponses = (fieldResponses as any).application || {};
         }
 
+
         responses = fieldResponses || {};
       }
 
+
       // Helper: determine resubmission state
       const isResubmissionState = application.status === 'resubmission';
+
 
       // ✅ NEW: Get field IDs from resubmission requests (Option B - supports both product and admin fields)
       let requestedFieldIdsFromRequests: number[] = [];
@@ -995,6 +1137,50 @@ export class VisaProductFieldsService {
               : null,
             editable: true, // Requested fields are always editable
             source: 'product',
+          };
+        }));
+      } else if (!isResubmissionState) {
+        // Not in resubmission: show all product fields
+        combinedFields.push(...productFields.map((field) => {
+          const response = responses[field.id] || responses[String(field.id)];
+          return {
+            ...field,
+            response: response
+              ? {
+                value: response.value,
+                filePath: response.filePath,
+                fileName: response.fileName,
+                fileSize: response.fileSize,
+                submittedAt: response.submittedAt,
+              }
+              : null,
+            editable: true,
+            source: 'product',
+          };
+        }));
+      }
+
+      // 2. Add admin fields (negative IDs)
+      if (requestedFieldIdsFromRequests.length > 0) {
+        // During resubmission: only show requested admin fields
+        const requestedAdminFields = adminFieldsForContext.filter((field: any) =>
+          requestedFieldIdsFromRequests.includes(field.id)
+        );
+        combinedFields.push(...requestedAdminFields.map((field: any) => {
+          const response = responses[field.id] || responses[String(field.id)];
+          return {
+            ...field,
+            response: response
+              ? {
+                value: response.value,
+                filePath: response.filePath,
+                fileName: response.fileName,
+                fileSize: response.fileSize,
+                submittedAt: response.submittedAt,
+              }
+              : null,
+            editable: true, // Requested fields are always editable
+            source: 'admin',
           };
         }));
       } else if (!isResubmissionState) {

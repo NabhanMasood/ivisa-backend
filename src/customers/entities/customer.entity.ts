@@ -41,6 +41,9 @@ export class Customer {
   @Column({ default: false })
   hasSchengenVisa: boolean; // Customer's Schengen visa status
 
+  @Column({ default: false })
+  receiveUpdates: boolean; // Whether customer wants to receive email updates
+
   @Column({ default: 'Active' })
   status: string; // Active, Inactive, Suspended
 

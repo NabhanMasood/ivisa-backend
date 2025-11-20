@@ -16,6 +16,10 @@ export class UpdateVisaApplicationDto {
   @IsOptional()
   destinationCountry?: string;
 
+  @IsNumber()
+  @IsOptional()
+  embassyId?: number;
+
   @IsString()
   @IsOptional()
   @Matches(/^\d+-(single|multiple)$/, {

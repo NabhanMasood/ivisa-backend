@@ -9,6 +9,7 @@ import { Customer } from '../customers/entities/customer.entity';
 import { VisaProduct } from '../visa-product/entities/visa-product.entity';
 import { Traveler } from '../travelers/entities/traveler.entity';
 import { Payment } from '../payments/entities/payment.entity';
+import { Embassy } from '../embassies/entities/embassy.entity';
 import { CreateVisaApplicationDto } from './dto/create-visa-application.dto';
 import { UpdateVisaApplicationDto } from './dto/update-visa-application.dto';
 import { SelectProcessingDto } from './dto/select-processing.dto';
@@ -32,11 +33,27 @@ export class VisaApplicationsService {
     private visaProductRepo: Repository<VisaProduct>,
     @InjectRepository(Traveler)
     private travelerRepo: Repository<Traveler>,
+    @InjectRepository(Embassy)
+    private embassyRepo: Repository<Embassy>,
     private couponsService: CouponsService,
     private cardInfoService: CardInfoService,
     private emailService: EmailService,
     private configService: ConfigService,
   ) { }
+
+  /**
+   * Resolve the public frontend URL from environment variables.
+   * Throws if FRONTEND_URL is not configured.
+   */
+  private getFrontendUrl(): string {
+    const url = this.configService.get<string>('FRONTEND_URL');
+    if (!url) {
+      throw new BadRequestException(
+        'FRONTEND_URL environment variable is not configured on the server.',
+      );
+    }
+    return url.replace(/\/$/, '');
+  }
 
   /**
    * Normalize fieldResponses structure for backward compatibility
@@ -122,6 +139,18 @@ export class VisaApplicationsService {
         throw new NotFoundException(
           `Visa product with ID ${createDto.visaProductId} not found`,
         );
+      }
+
+      // Validate embassy exists if embassyId is provided
+      if (createDto.embassyId) {
+        const embassy = await this.embassyRepo.findOne({
+          where: { id: createDto.embassyId },
+        });
+        if (!embassy) {
+          throw new NotFoundException(
+            `Embassy with ID ${createDto.embassyId} not found`,
+          );
+        }
       }
 
       // Generate application number
@@ -245,7 +274,7 @@ export class VisaApplicationsService {
     try {
       const application = await this.applicationRepo.findOne({
         where: { applicationNumber },
-        relations: ['customer', 'visaProduct', 'travelers', 'payment'],
+        relations: ['customer', 'visaProduct', 'travelers', 'payment', 'embassy'],
       });
 
       if (!application) {
@@ -283,6 +312,7 @@ export class VisaApplicationsService {
       residenceCountry: application.customer.residenceCountry,
       nationality: application.customer.nationality,
       hasSchengenVisa: application.customer.hasSchengenVisa,
+      receiveUpdates: application.customer.receiveUpdates ?? false,
     } : null;
 
     // ✅ Format travelers WITH their fieldResponses
@@ -297,6 +327,7 @@ export class VisaApplicationsService {
       passportExpiryDate: traveler.passportExpiryDate,
       residenceCountry: traveler.residenceCountry,
       hasSchengenVisa: traveler.hasSchengenVisa,
+      receiveUpdates: traveler.receiveUpdates ?? false,
       placeOfBirth: traveler.placeOfBirth,
       notes: traveler.notes,
       fieldResponses: traveler.fieldResponses || {},  // ✅ CRITICAL: Include fieldResponses
@@ -332,6 +363,14 @@ export class VisaApplicationsService {
         visaProductName: application.visaProduct?.productName || '',
         nationality: application.nationality,
         destinationCountry: application.destinationCountry,
+        embassy: application.embassy ? {
+          id: application.embassy.id,
+          embassyName: application.embassy.embassyName,
+          address: application.embassy.address,
+          destinationCountry: application.embassy.destinationCountry,
+          originCountry: application.embassy.originCountry,
+        } : null,
+        embassyId: application.embassyId || null,
         visaType: application.visaType,
         numberOfTravelers: application.numberOfTravelers,
         phoneNumber: application.phoneNumber,
@@ -486,7 +525,7 @@ export class VisaApplicationsService {
     try {
       const application = await this.applicationRepo.findOne({
         where: { id },
-        relations: ['customer', 'visaProduct', 'travelers', 'payment'],
+        relations: ['customer', 'visaProduct', 'travelers', 'payment', 'embassy'],
       });
 
       if (!application) {
@@ -540,6 +579,24 @@ export class VisaApplicationsService {
           throw new NotFoundException(
             `Visa product with ID ${updateDto.visaProductId} not found`,
           );
+        }
+      }
+
+      // Validate embassy exists if embassyId is provided
+      if (updateDto.embassyId !== undefined) {
+        if (updateDto.embassyId === null) {
+          // Allow clearing embassy selection
+          application.embassyId = null;
+        } else {
+          const embassy = await this.embassyRepo.findOne({
+            where: { id: updateDto.embassyId },
+          });
+          if (!embassy) {
+            throw new NotFoundException(
+              `Embassy with ID ${updateDto.embassyId} not found`,
+            );
+          }
+          application.embassyId = updateDto.embassyId;
         }
       }
 
@@ -725,7 +782,7 @@ export class VisaApplicationsService {
       });
 
       if (applicationWithCustomer?.customer?.email) {
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+        const frontendUrl = this.getFrontendUrl();
         const trackingUrl = `${frontendUrl}/track/${applicationWithCustomer.applicationNumber}`;
 
         // Send email based on new status (asynchronously)
@@ -749,6 +806,15 @@ export class VisaApplicationsService {
           ).catch(error => {
             console.error('Failed to send resubmission required email:', error);
           });
+        } else if (normalizedStatus === 'processing' || normalizedStatus === 'in_process') {
+          this.emailService.sendApplicationProcessingEmail(
+            applicationWithCustomer.customer.email,
+            applicationWithCustomer.customer.fullname,
+            applicationWithCustomer.applicationNumber,
+            trackingUrl,
+          ).catch(error => {
+            console.error('Failed to send application processing email:', error);
+          });
         } else if (normalizedStatus === 'completed') {
           this.emailService.sendApplicationCompletedEmail(
             applicationWithCustomer.customer.email,
@@ -757,6 +823,16 @@ export class VisaApplicationsService {
             trackingUrl,
           ).catch(error => {
             console.error('Failed to send application completed email:', error);
+          });
+        } else if (normalizedStatus === 'rejected') {
+          this.emailService.sendApplicationRejectedEmail(
+            applicationWithCustomer.customer.email,
+            applicationWithCustomer.customer.fullname,
+            applicationWithCustomer.applicationNumber,
+            application.rejectionReason || 'Application did not meet requirements',
+            trackingUrl,
+          ).catch(error => {
+            console.error('Failed to send application rejected email:', error);
           });
         }
       }
@@ -1004,6 +1080,7 @@ export class VisaApplicationsService {
         .leftJoinAndSelect('app.customer', 'customer')
         .leftJoinAndSelect('app.travelers', 'travelers')
         .leftJoinAndSelect('app.payment', 'payment')
+        .leftJoinAndSelect('app.embassy', 'embassy')
         .where('app.customerId = :customerId', { customerId });
 
       if (search) {
@@ -1031,12 +1108,31 @@ export class VisaApplicationsService {
           residenceCountry: app.customer.residenceCountry,
           nationality: app.customer.nationality,
           hasSchengenVisa: app.customer.hasSchengenVisa,
+          receiveUpdates: app.customer.receiveUpdates ?? false,
         } : null;
+
+        // Format additional travelers (travelers 2+)
+        const formattedTravelers = (app.travelers || []).map(traveler => ({
+          id: traveler.id,
+          firstName: traveler.firstName,
+          lastName: traveler.lastName,
+          email: traveler.email,
+          dateOfBirth: traveler.dateOfBirth,
+          passportNationality: traveler.passportNationality,
+          passportNumber: traveler.passportNumber,
+          passportExpiryDate: traveler.passportExpiryDate,
+          residenceCountry: traveler.residenceCountry,
+          hasSchengenVisa: traveler.hasSchengenVisa,
+          receiveUpdates: traveler.receiveUpdates ?? false,
+          placeOfBirth: traveler.placeOfBirth,
+          notes: traveler.notes,
+          fieldResponses: traveler.fieldResponses || {},
+        }));
 
         // Combine customer (traveler 1) with additional travelers
         const allTravelers = customerTraveler
-          ? [customerTraveler, ...(app.travelers || [])]
-          : (app.travelers || []);
+          ? [customerTraveler, ...formattedTravelers]
+          : formattedTravelers;
 
         return {
           id: app.id,
@@ -1061,6 +1157,14 @@ export class VisaApplicationsService {
           visaProductName: app.visaProduct?.productName || '',
           nationality: app.nationality,
           destinationCountry: app.destinationCountry,
+          embassy: app.embassy ? {
+            id: app.embassy.id,
+            embassyName: app.embassy.embassyName,
+            address: app.embassy.address,
+            destinationCountry: app.embassy.destinationCountry,
+            originCountry: app.embassy.originCountry,
+          } : null,
+          embassyId: app.embassyId || null,
           visaType: app.visaType,
           numberOfTravelers: app.numberOfTravelers,
           phoneNumber: app.phoneNumber,
@@ -1241,6 +1345,10 @@ export class VisaApplicationsService {
       }
 
       const firstTraveler = submitDto.travelers[0]; // Traveler 1 is the customer
+
+      // Debug: Log receiveUpdates value from payload
+      console.log('🔍 DEBUG: firstTraveler.receiveUpdates from payload:', firstTraveler.receiveUpdates, typeof firstTraveler.receiveUpdates);
+
       let customerId = submitDto.customerId;
       let customerWasCreated = false;
       let customer;
@@ -1265,6 +1373,7 @@ export class VisaApplicationsService {
           customer.dateOfBirth = new Date(firstTraveler.dateOfBirth);
           customer.phoneNumber = submitDto.phoneNumber || firstTraveler.phone || customer.phoneNumber;
           customer.hasSchengenVisa = firstTraveler.hasSchengenVisa;
+          customer.receiveUpdates = firstTraveler.receiveUpdates !== undefined ? firstTraveler.receiveUpdates : (customer.receiveUpdates ?? false);
           customer.status = customer.status || 'Active';
         } else {
           // Create new customer from traveler 1
@@ -1279,6 +1388,7 @@ export class VisaApplicationsService {
             dateOfBirth: new Date(firstTraveler.dateOfBirth),
             phoneNumber: submitDto.phoneNumber || firstTraveler.phone || undefined,
             hasSchengenVisa: firstTraveler.hasSchengenVisa,
+            receiveUpdates: firstTraveler.receiveUpdates !== undefined ? firstTraveler.receiveUpdates : false,
             status: 'Active',
           });
           customerWasCreated = true;
@@ -1304,6 +1414,7 @@ export class VisaApplicationsService {
         customer.dateOfBirth = new Date(firstTraveler.dateOfBirth);
         customer.phoneNumber = submitDto.phoneNumber || firstTraveler.phone || customer.phoneNumber;
         customer.hasSchengenVisa = firstTraveler.hasSchengenVisa;
+        customer.receiveUpdates = firstTraveler.receiveUpdates !== undefined ? firstTraveler.receiveUpdates : (customer.receiveUpdates ?? false);
       }
 
       // Save/update customer
@@ -1318,6 +1429,18 @@ export class VisaApplicationsService {
         throw new NotFoundException(
           `Visa product with ID ${submitDto.visaProductId} not found`,
         );
+      }
+
+      // Validate embassy exists if embassyId is provided
+      if (submitDto.embassyId) {
+        const embassy = await queryRunner.manager.findOne(Embassy, {
+          where: { id: submitDto.embassyId },
+        });
+        if (!embassy) {
+          throw new NotFoundException(
+            `Embassy with ID ${submitDto.embassyId} not found`,
+          );
+        }
       }
 
       // 4. Validate number of travelers matches
@@ -1356,6 +1479,7 @@ export class VisaApplicationsService {
         visaProductId: submitDto.visaProductId,
         nationality: savedCustomer.nationality || submitDto.nationality,
         destinationCountry: submitDto.destinationCountry,
+        embassyId: submitDto.embassyId,
         visaType: submitDto.visaType,
         numberOfTravelers: submitDto.numberOfTravelers,
         phoneNumber: savedCustomer.phoneNumber,
@@ -1369,7 +1493,7 @@ export class VisaApplicationsService {
         notes: submitDto.notes,
       });
 
-      const savedApplication = await queryRunner.manager.save(VisaApplication, application);
+      const savedApplication = await queryRunner.manager.save(application) as VisaApplication;
 
       // 3. Create travelers - ONLY travelers 2+ (traveler 1 is the customer, stored in customer table)
       // Skip the first traveler since they are the customer
@@ -1385,6 +1509,7 @@ export class VisaApplicationsService {
           passportExpiryDate: new Date(travelerData.passportExpiryDate),
           residenceCountry: travelerData.residenceCountry,
           hasSchengenVisa: travelerData.hasSchengenVisa,
+          receiveUpdates: travelerData.receiveUpdates !== undefined ? travelerData.receiveUpdates : false,
           placeOfBirth: travelerData.placeOfBirth,
         };
       });
@@ -1490,9 +1615,7 @@ export class VisaApplicationsService {
       // 13. Commit transaction
       await queryRunner.commitTransaction();
 
-      // 14. Send email notification to customer with tracking URL and payment invoice
-      // The tracking URL should be provided by the frontend (e.g., https://yourdomain.com/track/{applicationNumber})
-      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+      const frontendUrl = this.getFrontendUrl();
       const trackingUrl = `${frontendUrl}/track/${savedApplication.applicationNumber}`;
 
       // Prepare payment details for invoice
@@ -1520,6 +1643,18 @@ export class VisaApplicationsService {
       });
 
       // Reconstruct traveler 1 (the customer) from customer data
+      // Determine receiveUpdates: prioritize saved customer value, then firstTraveler from payload, then default to false
+      const receiveUpdatesValue = savedCustomer.receiveUpdates !== undefined && savedCustomer.receiveUpdates !== null
+        ? Boolean(savedCustomer.receiveUpdates)
+        : (firstTraveler.receiveUpdates !== undefined && firstTraveler.receiveUpdates !== null
+          ? Boolean(firstTraveler.receiveUpdates)
+          : false);
+
+      // Debug: Log the final receiveUpdates value being returned
+      console.log('🔍 DEBUG: savedCustomer.receiveUpdates:', savedCustomer.receiveUpdates);
+      console.log('🔍 DEBUG: firstTraveler.receiveUpdates:', firstTraveler.receiveUpdates);
+      console.log('🔍 DEBUG: Final receiveUpdatesValue for response:', receiveUpdatesValue);
+
       const customerTraveler = {
         firstName: savedCustomer.fullname.split(' ')[0] || firstTraveler.firstName,
         lastName: savedCustomer.fullname.split(' ').slice(1).join(' ') || firstTraveler.lastName,
@@ -1530,6 +1665,7 @@ export class VisaApplicationsService {
         passportExpiryDate: savedCustomer.passportExpiryDate,
         residenceCountry: savedCustomer.residenceCountry,
         hasSchengenVisa: savedCustomer.hasSchengenVisa ?? firstTraveler.hasSchengenVisa, // Use customer's value if available, otherwise from original
+        receiveUpdates: receiveUpdatesValue, // Always explicitly set as boolean
         placeOfBirth: firstTraveler.placeOfBirth, // Keep from original
       };
 
@@ -1548,6 +1684,11 @@ export class VisaApplicationsService {
             dateOfBirth: savedCustomer.dateOfBirth,
             residenceCountry: savedCustomer.residenceCountry,
             phoneNumber: savedCustomer.phoneNumber,
+            receiveUpdates: savedCustomer.receiveUpdates !== undefined && savedCustomer.receiveUpdates !== null
+              ? Boolean(savedCustomer.receiveUpdates)
+              : (firstTraveler.receiveUpdates !== undefined && firstTraveler.receiveUpdates !== null
+                ? Boolean(firstTraveler.receiveUpdates)
+                : false),
             status: savedCustomer.status,
           },
           customerId: customerId,
@@ -1568,6 +1709,7 @@ export class VisaApplicationsService {
               passportNumber: t.passportNumber,
               passportNationality: t.passportNationality,
               passportExpiryDate: t.passportExpiryDate,
+              receiveUpdates: t.receiveUpdates ?? false,
             })),
           ],
           payment: {
@@ -1739,6 +1881,35 @@ export class VisaApplicationsService {
       }
 
       await this.applicationRepo.save(application);
+
+      // Send resubmission email notification to customer
+      // Load customer information for email
+      const applicationWithCustomer = await this.applicationRepo.findOne({
+        where: { id: application.id },
+        relations: ['customer'],
+      });
+
+      if (applicationWithCustomer?.customer?.email) {
+        const frontendUrl = this.getFrontendUrl();
+        const trackingUrl = `${frontendUrl}/track/${applicationWithCustomer.applicationNumber}`;
+
+        // Get notes from resubmission requests (use first request's note or combine all notes)
+        const notes = processedRequests
+          .map(req => req.note)
+          .filter(note => note && note.trim())
+          .join('\n\n') || application.notes;
+
+        // Send email asynchronously
+        this.emailService.sendResubmissionRequiredEmail(
+          applicationWithCustomer.customer.email,
+          applicationWithCustomer.customer.fullname,
+          applicationWithCustomer.applicationNumber,
+          trackingUrl,
+          notes || undefined,
+        ).catch(error => {
+          console.error('Failed to send resubmission required email:', error);
+        });
+      }
 
       return {
         status: true,

@@ -13,6 +13,7 @@ import { Customer } from '../../customers/entities/customer.entity';
 import { VisaProduct } from '../../visa-product/entities/visa-product.entity';
 import { Traveler } from '../../travelers/entities/traveler.entity';
 import { Payment } from '../../payments/entities/payment.entity';
+import { Embassy } from '../../embassies/entities/embassy.entity';
 
 // ✅ NEW: Interface for resubmission requests
 export interface ResubmissionRequest {
@@ -52,6 +53,13 @@ export class VisaApplication {
 
   @Column()
   destinationCountry: string;
+
+  @ManyToOne(() => Embassy, { eager: false, nullable: true })
+  @JoinColumn({ name: 'embassyId' })
+  embassy: Embassy;
+
+  @Column({ type: 'int', nullable: true })
+  embassyId: number | null;
 
   @Column({ type: 'varchar', length: 20, nullable: true })
   phoneNumber: string;

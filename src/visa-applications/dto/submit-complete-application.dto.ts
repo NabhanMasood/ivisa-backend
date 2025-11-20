@@ -12,7 +12,7 @@ import {
   IsOptional,
   Matches,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 // Traveler with passport data combined
 class CompleteTravelerDto {
@@ -25,7 +25,7 @@ class CompleteTravelerDto {
   lastName: string;
 
   @IsEmail({}, { message: 'Please provide a valid email' })
-  @IsOptional() 
+  @IsOptional()
   email?: string;
 
   @IsDateString()
@@ -60,6 +60,19 @@ class CompleteTravelerDto {
   @IsString()
   @IsOptional()
   phone?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) return undefined;
+    // Handle both boolean and string representations
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return Boolean(value);
+  })
+  receiveUpdates?: boolean;
 }
 
 // Payment data
@@ -126,6 +139,10 @@ export class SubmitCompleteApplicationDto {
   @IsString()
   @IsNotEmpty({ message: 'Destination country is required' })
   destinationCountry: string;
+
+  @IsNumber()
+  @IsOptional()
+  embassyId?: number; // Optional embassy selection
 
   @IsString()
   @IsNotEmpty({ message: 'Visa type is required' })
