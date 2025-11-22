@@ -18,7 +18,7 @@ export class AppController {
   @Get('health')
   async healthCheck() {
     try {
-      // Check database connectio
+      // Check database connection
       await this.dataSource.query('SELECT 1');
       return {
         status: 'ok',
