@@ -45,9 +45,11 @@ export class EmailService {
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
             .content { background-color: #f9f9f9; padding: 30px; }
             .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
           </style>
         </head>
         <body>
@@ -62,6 +64,12 @@ export class EmailService {
                 <a href="${loginUrl}" class="button">Login to Your Account</a>
               </p>
               <p>If you have any questions, please contact our support team.</p>
+              <div class="contact-info">
+                <strong>Contact Us:</strong><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a><br>
+                New Orders: <a href="mailto:sophie@visa123.co.uk">sophie@visa123.co.uk</a><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
+              </div>
               <p>Best regards,<br>iVisa123 Team</p>
             </div>
             <div class="footer">
@@ -78,6 +86,11 @@ Thank you for creating your account with iVisa123.
 Login to your account: ${loginUrl}
 
 If you have any questions, please contact our support team.
+
+Contact Us:
+General Inquiry: opportunity@visa123.co.uk
+New Orders: sophie@visa123.co.uk
+Customer Support: support@visa123.co.uk
 
 Best regards,
 iVisa123 Team`,
@@ -132,6 +145,7 @@ iVisa123 Team`,
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
             .content { background-color: #f9f9f9; padding: 30px; }
             .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
             .invoice-box { background-color: white; padding: 20px; border: 1px solid #e0e0e0; margin: 20px 0; }
@@ -140,6 +154,7 @@ iVisa123 Team`,
             .invoice-row.discount { color: #FF5722; }
             .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
           </style>
         </head>
         <body>
@@ -157,7 +172,7 @@ iVisa123 Team`,
               
               ${paymentDetails ? `
               <div class="invoice-box">
-                <h3>Payment Invoice</h3>
+                <h3 style="color: #333; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin-top: 0;">Payment Invoice</h3>
                 <div class="invoice-row">
                   <span>Government Fee:</span>
                   <span>$${paymentDetails.governmentFee.toFixed(2)}</span>
@@ -192,6 +207,12 @@ iVisa123 Team`,
               
               <p>Our team will review your application within 24-48 hours. You'll receive email notifications for any status updates.</p>
               
+              <div class="contact-info">
+                <strong>Need Help?</strong><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
+              </div>
+              
               <p>Best regards,<br>iVisa123 Team</p>
             </div>
             <div class="footer">
@@ -222,6 +243,10 @@ ${paymentDetails.paymentMethod ? `Payment Method: ${paymentDetails.paymentMethod
 Track your application: ${trackingUrl}
 
 Our team will review your application within 24-48 hours. You'll receive email notifications for any status updates.
+
+Need Help?
+General Inquiry: opportunity@visa123.co.uk
+Customer Support: support@visa123.co.uk
 
 Best regards,
 iVisa123 Team`,
@@ -265,11 +290,13 @@ iVisa123 Team`,
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
             .content { background-color: #f9f9f9; padding: 30px; }
-            .info-box { background-color: #fff3e0; padding: 15px; border-left: 4px solid #FF9800; margin: 20px 0; }
-            .button { display: inline-block; padding: 12px 30px; background-color: #FF9800; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
           </style>
         </head>
         <body>
@@ -293,6 +320,12 @@ iVisa123 Team`,
               
               <p>Please provide the requested information as soon as possible. Your application processing will resume once we receive the information.</p>
               
+              <div class="contact-info">
+                <strong>Need Help?</strong><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
+              </div>
+              
               <p>Best regards,<br>iVisa123 Team</p>
             </div>
             <div class="footer">
@@ -311,6 +344,10 @@ Application Number: ${applicationNumber}
 ${notes ? `Note from our team:\n${notes}\n\n` : ''}Please log in to submit the necessary details: ${trackingUrl}
 
 Please provide the requested information as soon as possible. Your application processing will resume once we receive the information.
+
+Need Help?
+Customer Support: support@visa123.co.uk
+General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
 iVisa123 Team`,
@@ -354,11 +391,13 @@ iVisa123 Team`,
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #F44336; color: white; padding: 20px; text-align: center; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
             .content { background-color: #f9f9f9; padding: 30px; }
-            .info-box { background-color: #ffebee; padding: 15px; border-left: 4px solid #F44336; margin: 20px 0; }
-            .button { display: inline-block; padding: 12px 30px; background-color: #F44336; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
           </style>
         </head>
         <body>
@@ -376,9 +415,17 @@ iVisa123 Team`,
               
               ${notes ? `<p><strong>Note from our team:</strong><br>${notes}</p>` : ''}
               
-          
+              <p style="text-align: center;">
+                <a href="${trackingUrl}" class="button">Resubmit Your Application</a>
+              </p>
               
               <p>Please review your application and make the necessary corrections. Our team will review your resubmission promptly.</p>
+              
+              <div class="contact-info">
+                <strong>Need Help?</strong><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
+              </div>
               
               <p>Best regards,<br>iVisa123 Team</p>
             </div>
@@ -398,6 +445,10 @@ Application Number: ${applicationNumber}
 ${notes ? `Note from our team:\n${notes}\n\n` : ''}Please review your application and make the necessary corrections: ${trackingUrl}
 
 Our team will review your resubmission promptly.
+
+Need Help?
+Customer Support: support@visa123.co.uk
+General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
 iVisa123 Team`,
@@ -440,11 +491,13 @@ iVisa123 Team`,
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #2196F3; color: white; padding: 20px; text-align: center; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
             .content { background-color: #f9f9f9; padding: 30px; }
-            .info-box { background-color: #e3f2fd; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0; }
-            .button { display: inline-block; padding: 12px 30px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
           </style>
         </head>
         <body>
@@ -460,9 +513,16 @@ iVisa123 Team`,
                 <strong>Application Number:</strong> ${applicationNumber}
               </div>
               
-             
+              <p style="text-align: center;">
+                <a href="${trackingUrl}" class="button">Track Your Application</a>
+              </p>
               
               <p>We'll notify you via email once there are any updates to your application status.</p>
+              
+              <div class="contact-info">
+                <strong>Questions?</strong><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
+              </div>
               
               <p>Best regards,<br>iVisa123 Team</p>
             </div>
@@ -482,6 +542,9 @@ Application Number: ${applicationNumber}
 Track your application: ${trackingUrl}
 
 We'll notify you via email once there are any updates to your application status.
+
+Questions?
+Customer Support: support@visa123.co.uk
 
 Best regards,
 iVisa123 Team`,
@@ -525,10 +588,12 @@ iVisa123 Team`,
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
             .content { background-color: #f9f9f9; padding: 30px; }
             .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
             .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
           </style>
         </head>
         <body>
@@ -545,9 +610,17 @@ iVisa123 Team`,
                 <strong>Status:</strong> Completed
               </div>
               
-           
+              <p style="text-align: center;">
+                <a href="${trackingUrl}" class="button">View Application Details</a>
+              </p>
               
               <p>Thank you for choosing iVisa123 for your visa application needs.</p>
+              
+              <div class="contact-info">
+                <strong>Contact Us:</strong><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
+              </div>
               
               <p>Best regards,<br>iVisa123 Team</p>
             </div>
@@ -568,6 +641,10 @@ Status: Completed
 View your application details: ${trackingUrl}
 
 Thank you for choosing iVisa123 for your visa application needs.
+
+Contact Us:
+Customer Support: support@visa123.co.uk
+General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
 iVisa123 Team`,
@@ -611,11 +688,13 @@ iVisa123 Team`,
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #F44336; color: white; padding: 20px; text-align: center; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
             .content { background-color: #f9f9f9; padding: 30px; }
-            .info-box { background-color: #ffebee; padding: 15px; border-left: 4px solid #F44336; margin: 20px 0; }
-            .button { display: inline-block; padding: 12px 30px; background-color: #F44336; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
           </style>
         </head>
         <body>
@@ -631,9 +710,18 @@ iVisa123 Team`,
                 <strong>Application Number:</strong> ${applicationNumber}<br>
                 <strong>Reason:</strong> ${rejectionReason}
               </div>
-           
+              
+              <p style="text-align: center;">
+                <a href="${trackingUrl}" class="button">View Application Details</a>
+              </p>
               
               <p>If you have any questions about this decision, please contact our support team.</p>
+              
+              <div class="contact-info">
+                <strong>Need Help?</strong><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
+              </div>
               
               <p>Best regards,<br>iVisa123 Team</p>
             </div>
@@ -654,6 +742,10 @@ Reason: ${rejectionReason}
 View your application details: ${trackingUrl}
 
 If you have any questions about this decision, please contact our support team.
+
+Need Help?
+Customer Support: support@visa123.co.uk
+General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
 iVisa123 Team`,
@@ -696,11 +788,13 @@ iVisa123 Team`,
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #2196F3; color: white; padding: 20px; text-align: center; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
             .content { background-color: #f9f9f9; padding: 30px; }
-            .credentials-box { background-color: #e3f2fd; padding: 20px; border-left: 4px solid #2196F3; margin: 20px 0; font-family: monospace; }
-            .button { display: inline-block; padding: 12px 30px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .credentials-box { background-color: #e8f5e9; padding: 20px; border-left: 4px solid #4CAF50; margin: 20px 0; font-family: monospace; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
           </style>
         </head>
         <body>
@@ -724,6 +818,11 @@ iVisa123 Team`,
               
               <p><strong>Important:</strong> Please change your password immediately after your first login.</p>
               
+              <div class="contact-info">
+                <strong>Need Assistance?</strong><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
+              </div>
+              
               <p>Best regards,<br>iVisa123 Team</p>
             </div>
             <div class="footer">
@@ -744,6 +843,9 @@ Temporary Password: ${temporaryPassword}
 Login to Admin Panel: ${adminPanelUrl}
 
 Important: Please change your password immediately after your first login.
+
+Need Assistance?
+General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
 iVisa123 Team`,
@@ -787,10 +889,12 @@ iVisa123 Team`,
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
             .content { background-color: #f9f9f9; padding: 30px; }
             .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
             .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
           </style>
         </head>
         <body>
@@ -806,9 +910,16 @@ iVisa123 Team`,
                 <strong>Application Number:</strong> ${applicationNumber}
               </div>
               
-           
+              <p style="text-align: center;">
+                <a href="${trackingUrl}" class="button">Track Your Application</a>
+              </p>
               
               <p>Our team will review the submitted information and continue processing your application. You'll receive email notifications for any status updates.</p>
+              
+              <div class="contact-info">
+                <strong>Questions?</strong><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
+              </div>
               
               <p>Best regards,<br>iVisa123 Team</p>
             </div>
@@ -829,6 +940,9 @@ Track your application: ${trackingUrl}
 
 Our team will review the submitted information and continue processing your application. You'll receive email notifications for any status updates.
 
+Questions?
+Customer Support: support@visa123.co.uk
+
 Best regards,
 iVisa123 Team`,
     };
@@ -838,6 +952,239 @@ iVisa123 Team`,
       this.logger.log(`Document submission email sent to ${to} for application ${applicationNumber}`);
     } catch (error) {
       this.logger.error(`Failed to send document submission email to ${to}:`, error);
+    }
+  }
+
+  /**
+   * Send pending application reminder email
+   * Sent when user hasn't submitted their application after a certain time
+   */
+  async sendPendingApplicationReminderEmail(
+    to: string,
+    customerName: string,
+    applicationUrl: string,
+    couponCode?: string,
+    couponDiscount?: string,
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL');
+
+    if (!fromEmail) {
+      this.logger.error('SENDGRID_FROM_EMAIL not configured');
+      return;
+    }
+
+    const msg = {
+      to,
+      from: fromEmail,
+      subject: 'Complete Your Visa Application - Special Offer Inside!',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
+            .content { background-color: #f9f9f9; padding: 30px; }
+            .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+            .coupon-box { background-color: #4CAF50; padding: 20px; border: 2px solid #4CAF50; margin: 20px 0; text-align: center; }
+            .coupon-box h2, .coupon-box h3 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; }
+            .coupon-code { font-size: 24px; font-weight: bold; color: white; margin: 10px 0; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Don't Miss Out on Your Visa Application!</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${customerName},</p>
+              <p>We noticed you started a visa application but haven't completed it yet. Your application is waiting for you!</p>
+              
+              ${couponCode ? `
+              <div class="coupon-box" style="background-color: #4CAF50; padding: 20px; border: 2px solid #4CAF50; margin: 20px 0; text-align: center;">
+                <h3 style="margin-top: 0; color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600;">Special Offer Just For You!</h3>
+                <p style="color: white;">Use this coupon code to get ${couponDiscount || 'a discount'} on your application:</p>
+                <div style="font-size: 24px; font-weight: bold; color: white; margin: 10px 0;">${couponCode}</div>
+                <p style="font-size: 12px; color: white;">Enter this code at checkout to apply your discount</p>
+              </div>
+              ` : ''}
+              
+              <p style="text-align: center;">
+                <a href="${applicationUrl}" class="button">Complete Your Application Now</a>
+              </p>
+              
+              <p>Complete your application in just a few minutes and get one step closer to your travel destination.</p>
+              
+              <p>If you have any questions, our support team is here to help.</p>
+              
+              <div class="contact-info">
+                <strong>Need Help?</strong><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a><br>
+                New Orders: <a href="mailto:sophie@visa123.co.uk">sophie@visa123.co.uk</a>
+              </div>
+              
+              <p>Best regards,<br>iVisa123 Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated email. Please do not reply to this message.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `Dear ${customerName},
+
+We noticed you started a visa application but haven't completed it yet. Your application is waiting for you!
+
+${couponCode ? `Special Offer: Use coupon code ${couponCode} to get ${couponDiscount || 'a discount'} on your application!\n\n` : ''}Complete your application: ${applicationUrl}
+
+Complete your application in just a few minutes and get one step closer to your travel destination.
+
+If you have any questions, our support team is here to help.
+
+Need Help?
+Customer Support: support@visa123.co.uk
+New Orders: sophie@visa123.co.uk
+
+Best regards,
+iVisa123 Team`,
+    };
+
+    try {
+      await sgMail.send(msg);
+      this.logger.log(`Pending application reminder email sent to ${to}`);
+    } catch (error) {
+      this.logger.error(`Failed to send pending application reminder email to ${to}:`, error);
+    }
+  }
+
+  /**
+   * Send coupon email for abandoned applications
+   * Sent when user still hasn't submitted after the pending reminder
+   */
+  async sendAbandonedApplicationCouponEmail(
+    to: string,
+    customerName: string,
+    applicationUrl: string,
+    couponCode: string,
+    couponDiscount: string,
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL');
+
+    if (!fromEmail) {
+      this.logger.error('SENDGRID_FROM_EMAIL not configured');
+      return;
+    }
+
+    const msg = {
+      to,
+      from: fromEmail,
+      subject: 'Last Chance: Special Discount on Your Visa Application!',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
+            .content { background-color: #f9f9f9; padding: 30px; }
+            .urgent-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+            .coupon-box { background-color: #4CAF50; padding: 30px; border: 2px solid #4CAF50; margin: 20px 0; text-align: center; }
+            .coupon-box h2 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; }
+            .coupon-code { font-size: 32px; font-weight: bold; color: white; margin: 15px 0; letter-spacing: 2px; }
+            .discount-text { font-size: 18px; color: white; margin: 10px 0; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Last Chance - Don't Miss This Offer!</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${customerName},</p>
+              <p>We don't want you to miss out on your travel plans! Complete your visa application now and save with this exclusive discount.</p>
+              
+              <div class="urgent-box">
+                <strong>⏰ Limited Time Offer</strong><br>
+                This special discount is available for a limited time only. Don't wait!
+              </div>
+              
+              <div class="coupon-box">
+                <h2 style="margin-top: 0; color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600;">Your Exclusive Discount Code</h2>
+                <div class="coupon-code">${couponCode}</div>
+                <div class="discount-text">${couponDiscount}</div>
+                <p style="font-size: 14px; color: white;">Enter this code at checkout to apply your discount</p>
+              </div>
+              
+              <p style="text-align: center;">
+                <a href="${applicationUrl}" class="button">Complete Application & Save Now</a>
+              </p>
+              
+              <p>Your application is just a few steps away from completion. Use your discount code and secure your visa today!</p>
+              
+              <p>If you need any assistance, our support team is ready to help.</p>
+              
+              <div class="contact-info">
+                <strong>Need Assistance?</strong><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a><br>
+                New Orders: <a href="mailto:sophie@visa123.co.uk">sophie@visa123.co.uk</a><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
+              </div>
+              
+              <p>Best regards,<br>iVisa123 Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated email. Please do not reply to this message.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `Dear ${customerName},
+
+We don't want you to miss out on your travel plans! Complete your visa application now and save with this exclusive discount.
+
+⏰ Limited Time Offer - This special discount is available for a limited time only.
+
+Your Exclusive Discount Code: ${couponCode}
+${couponDiscount}
+
+Enter this code at checkout to apply your discount.
+
+Complete your application: ${applicationUrl}
+
+Your application is just a few steps away from completion. Use your discount code and secure your visa today!
+
+If you need any assistance, our support team is ready to help.
+
+Need Assistance?
+Customer Support: support@visa123.co.uk
+New Orders: sophie@visa123.co.uk
+General Inquiry: opportunity@visa123.co.uk
+
+Best regards,
+iVisa123 Team`,
+    };
+
+    try {
+      await sgMail.send(msg);
+      this.logger.log(`Abandoned application coupon email sent to ${to}`);
+    } catch (error) {
+      this.logger.error(`Failed to send abandoned application coupon email to ${to}:`, error);
     }
   }
 

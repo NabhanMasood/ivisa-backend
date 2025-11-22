@@ -5,6 +5,7 @@ import { DataSource } from 'typeorm';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { SettingsService } from './settings/settings.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -54,6 +55,16 @@ async function bootstrap() {
   } catch (error) {
     console.error('Error seeding admins (non-fatal):', error.message);
     // Don't crash the app if seeding fails
+  }
+
+  // Initialize default settings
+  try {
+    const settingsService = app.get(SettingsService);
+    await settingsService.initializeDefaultSettings();
+    console.log('✅ Default settings initialized');
+  } catch (error) {
+    console.error('Error initializing settings (non-fatal):', error.message);
+    // Don't crash the app if settings initialization fails
   }
 
   // Use PORT from environment or fallback to 5000

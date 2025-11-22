@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 import { VisaProduct } from './entities/visa-product.entity';
 import { ProcessingFee } from './entities/processing-fee.entity';
 import { CreateVisaProductDto } from './dto/create-visa-product.dto';
+import { VisaApplication } from '../visa-applications/entities/visa-application.entity';
 
 @Injectable()
 export class VisaProductService {
@@ -12,7 +13,9 @@ export class VisaProductService {
     private visaProductRepo: Repository<VisaProduct>,
     @InjectRepository(ProcessingFee)
     private processingFeeRepo: Repository<ProcessingFee>,
-  ) {}
+    @InjectRepository(VisaApplication)
+    private applicationRepo: Repository<VisaApplication>,
+  ) { }
 
   async create(createDto: CreateVisaProductDto) {
     try {
@@ -198,6 +201,115 @@ export class VisaProductService {
         message: 'Error updating visa product',
         error: error.message,
       };
+    }
+  }
+
+  /**
+   * Duplicate a visa product (additional form) with all its fields and processing fees
+   */
+  async duplicate(id: number) {
+    try {
+      // Find the source visa product
+      const sourceProduct = await this.visaProductRepo.findOne({
+        where: { id },
+        relations: ['processingFees'],
+      });
+
+      if (!sourceProduct) {
+        throw new NotFoundException(`Visa product with ID ${id} not found`);
+      }
+
+      // Create new visa product with copied data
+      const newProduct = this.visaProductRepo.create({
+        country: sourceProduct.country,
+        productName: `${sourceProduct.productName} (Copy)`, // Add "(Copy)" to distinguish
+        duration: sourceProduct.duration,
+        validity: sourceProduct.validity,
+        entryType: sourceProduct.entryType,
+        govtFee: sourceProduct.govtFee,
+        serviceFee: sourceProduct.serviceFee,
+        totalAmount: sourceProduct.totalAmount,
+        fields: sourceProduct.fields ? JSON.parse(JSON.stringify(sourceProduct.fields)) : null, // Deep copy fields array
+        maxFieldId: sourceProduct.maxFieldId || 0,
+      });
+
+      const savedProduct = await this.visaProductRepo.save(newProduct);
+
+      // Copy processing fees if they exist
+      if (sourceProduct.processingFees && sourceProduct.processingFees.length > 0) {
+        const fees = sourceProduct.processingFees.map((fee) =>
+          this.processingFeeRepo.create({
+            feeType: fee.feeType,
+            timeValue: fee.timeValue,
+            timeUnit: fee.timeUnit,
+            amount: fee.amount,
+            visaProductId: savedProduct.id,
+          })
+        );
+        await this.processingFeeRepo.save(fees);
+      }
+
+      // Fetch the complete duplicated product with processing fees
+      const result = await this.visaProductRepo.findOne({
+        where: { id: savedProduct.id },
+        relations: ['processingFees'],
+      });
+
+      return {
+        status: true,
+        message: 'Visa product duplicated successfully',
+        data: result,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error.message || 'Error duplicating visa product',
+      );
+    }
+  }
+
+  /**
+   * Delete a visa product (additional form)
+   * Checks if there are any applications using this product before deleting
+   */
+  async remove(id: number) {
+    try {
+      // Check if visa product exists
+      const visaProduct = await this.visaProductRepo.findOne({
+        where: { id },
+      });
+
+      if (!visaProduct) {
+        throw new NotFoundException(`Visa product with ID ${id} not found`);
+      }
+
+      // Check if there are any applications using this product
+      const applicationsCount = await this.applicationRepo.count({
+        where: { visaProductId: id },
+      });
+
+      if (applicationsCount > 0) {
+        throw new BadRequestException(
+          `Cannot delete visa product. There are ${applicationsCount} application(s) using this product. Please remove or reassign these applications first.`,
+        );
+      }
+
+      // Delete the visa product (processing fees will be cascade deleted)
+      await this.visaProductRepo.remove(visaProduct);
+
+      return {
+        status: true,
+        message: 'Visa product deleted successfully',
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error.message || 'Error deleting visa product',
+      );
     }
   }
 }

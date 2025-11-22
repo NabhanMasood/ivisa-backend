@@ -4,12 +4,15 @@ import { Repository } from 'typeorm';
 import { Embassy } from './entities/embassy.entity';
 import { CreateEmbassyDto } from './dto/create-embassy.dto';
 import { UpdateEmbassyDto } from './dto/update-embassy.dto';
+import { VisaApplication } from '../visa-applications/entities/visa-application.entity';
 
 @Injectable()
 export class EmbassiesService {
   constructor(
     @InjectRepository(Embassy)
     private embassyRepo: Repository<Embassy>,
+    @InjectRepository(VisaApplication)
+    private applicationRepo: Repository<VisaApplication>,
   ) {}
 
   async create(createDto: CreateEmbassyDto): Promise<Embassy> {
@@ -174,9 +177,21 @@ export class EmbassiesService {
       if (!embassy) {
         throw new NotFoundException(`Embassy with ID ${id} not found`);
       }
+
+      // Check if there are any applications using this embassy
+      const applicationsCount = await this.applicationRepo.count({
+        where: { embassyId: id },
+      });
+
+      if (applicationsCount > 0) {
+        throw new BadRequestException(
+          `Cannot delete embassy. There are ${applicationsCount} application(s) using this embassy. Please remove or reassign these applications first.`,
+        );
+      }
+
       await this.embassyRepo.remove(embassy);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       throw new BadRequestException(error.message || 'Error deleting embassy');

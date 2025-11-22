@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsIn,
   Matches,
+  IsEmail,
 } from 'class-validator';
 
 export class UpdateVisaApplicationDto {
@@ -66,4 +67,8 @@ export class UpdateVisaApplicationDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsEmail({}, { message: 'Please provide a valid email' })
+  @IsOptional()
+  email?: string; // Email captured on first step for pending reminders
 }

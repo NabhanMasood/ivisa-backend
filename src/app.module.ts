@@ -18,6 +18,8 @@ import { StripeModule } from './stripe/stripe.module';
 import { CardInfoModule } from './card-info/card-info.module';
 import { CommonModule } from './common/common.module';
 import { EmailModule } from './email/email.module';
+import { SettingsModule } from './settings/settings.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -26,6 +28,9 @@ import { EmailModule } from './email/email.module';
       isGlobal: true,
       envFilePath: '.env', // ensures it reads from your local .env
     }),
+
+    // Schedule module for cron jobs
+    ScheduleModule.forRoot(),
 
     CommonModule,
 
@@ -87,6 +92,7 @@ import { EmailModule } from './email/email.module';
     CardInfoModule,
     ProcessingOptionsModule,
     EmailModule,
+    SettingsModule,
   ], controllers: [AppController],
   providers: [AppService],
 })

@@ -146,6 +146,19 @@ export class VisaApplication {
     submittedAt?: Date;
   }>;
 
+  // Email tracking for pending application reminders
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  emailCaptured?: string | null; // Email captured on first step
+
+  @Column({ type: 'timestamp', nullable: true })
+  emailCapturedAt?: Date | null; // When email was first captured
+
+  @Column({ type: 'timestamp', nullable: true })
+  pendingReminderSentAt?: Date | null; // When pending reminder email was sent
+
+  @Column({ type: 'timestamp', nullable: true })
+  couponEmailSentAt?: Date | null; // When coupon email was sent
+
   @CreateDateColumn()
   createdAt: Date;
 

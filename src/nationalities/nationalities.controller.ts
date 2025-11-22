@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, BadRequestException, HttpCode, HttpStatus, UseFilters, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, BadRequestException, HttpCode, HttpStatus, UseFilters, Param, Delete, ParseIntPipe } from '@nestjs/common';
 import { NationalitiesService } from './nationalities.service';
 import { CreateNationalityDto } from './dto/create-nationality.dto';
 import { NationalitiesHttpExceptionFilter } from './http-exception.filter';
@@ -14,6 +14,16 @@ export class NationalitiesController {
     try {
       const result = await this.service.create(dto);
       return { status: true, message: 'Nationality created successfully', data: result };
+    } catch (err) {
+      throw new BadRequestException({ message: err.message });
+    }
+  }
+
+  @Get()
+  async findAll(@Query('q') q?: string) {
+    try {
+      const result = await this.service.findAll(q);
+      return { status: true, message: 'Nationalities fetched successfully', data: result };
     } catch (err) {
       throw new BadRequestException({ message: err.message });
     }
@@ -83,6 +93,20 @@ export class NationalitiesController {
         message: 'Products fetched successfully',
         data: result,
       };
+    } catch (err) {
+      throw new BadRequestException({ message: err.message });
+    }
+  }
+
+  /**
+   * Delete a nationality record by ID
+   */
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    try {
+      await this.service.remove(id);
+      return { status: true, message: 'Nationality deleted successfully' };
     } catch (err) {
       throw new BadRequestException({ message: err.message });
     }

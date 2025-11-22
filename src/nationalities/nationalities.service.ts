@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 import { Nationality } from './entities/nationality.entity';
@@ -12,7 +12,7 @@ export class NationalitiesService {
     @InjectRepository(Nationality) private nationalityRepo: Repository<Nationality>,
     @InjectRepository(Country) private countryRepo: Repository<Country>,
     @InjectRepository(VisaProduct) private visaProductRepo: Repository<VisaProduct>,
-  ) {}
+  ) { }
 
   // Create nationality with product
   async create(dto: CreateNationalityDto) {
@@ -24,6 +24,31 @@ export class NationalitiesService {
 
     const nationality = this.nationalityRepo.create(dto);
     return this.nationalityRepo.save(nationality);
+  }
+
+  // Get all nationalities (with optional search)
+  async findAll(q?: string) {
+    const query = this.nationalityRepo.createQueryBuilder('n');
+
+    if (q && q.trim()) {
+      query.where('LOWER(n.nationality) LIKE :q', { q: `%${q.toLowerCase()}%` })
+        .orWhere('LOWER(n.destination) LIKE :q', { q: `%${q.toLowerCase()}%` })
+        .orWhere('LOWER(n.productName) LIKE :q', { q: `%${q.toLowerCase()}%` });
+    }
+
+    const nationalities = await query.orderBy('n.nationality', 'ASC').getMany();
+
+    return nationalities.map(n => ({
+      id: n.id,
+      nationality: n.nationality,
+      destination: n.destination,
+      productName: n.productName,
+      govtFee: n.govtFee,
+      serviceFee: n.serviceFee,
+      totalAmount: n.totalAmount,
+      createdAt: n.createdAt,
+      updatedAt: n.updatedAt,
+    }));
   }
 
   // Get dropdown for nationalities
@@ -139,12 +164,12 @@ export class NationalitiesService {
       .getMany();
 
     const products: Array<{
-      id: number; 
+      id: number;
       productName: string;
       duration: number;
       validity: number;
-      visaType: string;  
-      entryType: string; 
+      visaType: string;
+      entryType: string;
       govtFee: number;
       serviceFee: number;
       totalAmount: number;
@@ -165,21 +190,41 @@ export class NationalitiesService {
 
       if (visaProduct) {
         products.push({
-          id: visaProduct.id, 
+          id: visaProduct.id,
           productName: np.productName,
           duration: visaProduct.duration,
           validity: visaProduct.validity,
           entryType: visaProduct.entryType,
-          visaType: `${visaProduct.validity}-${visaProduct.entryType}`, 
+          visaType: `${visaProduct.validity}-${visaProduct.entryType}`,
           govtFee: np.govtFee !== null && np.govtFee !== undefined ? np.govtFee : visaProduct.govtFee,
           serviceFee: np.serviceFee !== null && np.serviceFee !== undefined ? np.serviceFee : visaProduct.serviceFee,
           totalAmount: np.totalAmount !== null && np.totalAmount !== undefined ? np.totalAmount : visaProduct.totalAmount,
         });
-        
+
         processedProducts.add(np.productName.toLowerCase());
       }
     }
 
     return products;
+  }
+
+  /**
+   * Delete a nationality record by ID
+   */
+  async remove(id: number): Promise<void> {
+    try {
+      const nationality = await this.nationalityRepo.findOne({ where: { id } });
+
+      if (!nationality) {
+        throw new NotFoundException(`Nationality with ID ${id} not found`);
+      }
+
+      await this.nationalityRepo.remove(nationality);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(error.message || 'Error deleting nationality');
+    }
   }
 }

@@ -11,6 +11,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { VisaApplicationsService } from './visa-applications.service';
+import { VisaApplicationsScheduler } from './visa-applications.scheduler';
 import { CreateVisaApplicationDto } from './dto/create-visa-application.dto';
 import { UpdateVisaApplicationDto } from './dto/update-visa-application.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
@@ -23,6 +24,7 @@ import { SubmitCompleteApplicationDto } from './dto/submit-complete-application.
 export class VisaApplicationsController {
   constructor(
     private readonly visaApplicationsService: VisaApplicationsService,
+    private readonly visaApplicationsScheduler: VisaApplicationsScheduler,
   ) { }
 
   /**
@@ -352,6 +354,28 @@ export class VisaApplicationsController {
       throw new BadRequestException({
         status: false,
         message: error.message || 'Failed to submit complete application',
+      });
+    }
+  }
+
+  /**
+   * POST /visa-applications/test-send-reminders
+   * Manual trigger for testing - runs the reminder scheduler immediately
+   * ⚠️ FOR TESTING ONLY - Remove or protect in production
+   */
+  @Post('test-send-reminders')
+  async testSendReminders() {
+    try {
+      await this.visaApplicationsScheduler.handlePendingApplicationReminders();
+
+      return {
+        status: true,
+        message: 'Reminder check triggered successfully. Check server logs and database for results.',
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to trigger reminder check',
       });
     }
   }

@@ -103,6 +103,26 @@ export class EmbassiesController {
     }
   }
 
+  /**
+   * Delete an embassy by ID
+   * Note: This route must come before generic :id routes to avoid conflicts with destination routes
+   */
+  @Delete(':id')
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    try {
+      await this.embassiesService.remove(id);
+      return {
+        status: true,
+        message: 'Embassy deleted successfully',
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to delete embassy',
+      });
+    }
+  }
+
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     try {
@@ -133,22 +153,6 @@ export class EmbassiesController {
       throw new BadRequestException({
         status: false,
         message: error.message || 'Failed to update embassy',
-      });
-    }
-  }
-
-  @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    try {
-      await this.embassiesService.remove(id);
-      return {
-        status: true,
-        message: 'Embassy deleted successfully',
-      };
-    } catch (error) {
-      throw new BadRequestException({
-        status: false,
-        message: error.message || 'Failed to delete embassy',
       });
     }
   }

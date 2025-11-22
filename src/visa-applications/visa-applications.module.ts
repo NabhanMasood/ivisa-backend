@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { VisaApplicationsService } from './visa-applications.service';
 import { VisaApplicationsController } from './visa-applications.controller';
+import { VisaApplicationsScheduler } from './visa-applications.scheduler';
 import { VisaApplication } from './entities/visa-application.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { VisaProduct } from '../visa-product/entities/visa-product.entity';
@@ -10,6 +11,7 @@ import { Embassy } from '../embassies/entities/embassy.entity';
 import { CouponsModule } from '../coupons/coupons.module';
 import { CardInfoModule } from '../card-info/card-info.module';
 import { EmailModule } from '../email/email.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
@@ -17,9 +19,10 @@ import { EmailModule } from '../email/email.module';
     CouponsModule, // Import to use CouponsService
     CardInfoModule, // Import to use CardInfoService
     EmailModule, // Import to use EmailService
+    SettingsModule, // Import to use SettingsService
   ],
   controllers: [VisaApplicationsController],
-  providers: [VisaApplicationsService],
+  providers: [VisaApplicationsService, VisaApplicationsScheduler],
   exports: [VisaApplicationsService], // Export for use in other modules (travelers, payments)
 })
 export class VisaApplicationsModule { }

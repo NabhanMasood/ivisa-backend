@@ -21,6 +21,7 @@ import { CardInfo } from '../card-info/entities/card-info.entity';
 import { VisaApplication, ResubmissionRequest } from './entities/visa-application.entity';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class VisaApplicationsService {
@@ -39,6 +40,7 @@ export class VisaApplicationsService {
     private cardInfoService: CardInfoService,
     private emailService: EmailService,
     private configService: ConfigService,
+    private settingsService: SettingsService,
   ) { }
 
   /**
@@ -174,7 +176,10 @@ export class VisaApplicationsService {
         totalAmount,
         processingFee: 0,
         status: 'draft',
-      });
+        // Capture email if provided for pending reminders
+        emailCaptured: createDto.email || customer.email || null,
+        emailCapturedAt: (createDto.email || customer.email) ? new Date() : null,
+      } as Partial<VisaApplication>);
 
       const result = await this.applicationRepo.save(application);
 
@@ -611,8 +616,22 @@ export class VisaApplicationsService {
         }
       }
 
-      // Update application
-      Object.assign(application, updateDto);
+      // Handle email capture for pending reminders
+      if (updateDto.email) {
+        // Only set emailCapturedAt if email is being set for the first time
+        if (!application.emailCaptured) {
+          application.emailCaptured = updateDto.email;
+          application.emailCapturedAt = new Date();
+        } else if (application.emailCaptured !== updateDto.email) {
+          // Update email if it's different
+          application.emailCaptured = updateDto.email;
+          // Don't update emailCapturedAt if email was already captured
+        }
+      }
+
+      // Update application (exclude email from updateDto to handle separately)
+      const { email, ...restUpdateDto } = updateDto;
+      Object.assign(application, restUpdateDto);
 
       // Recalculate fees if numberOfTravelers changed
       if (updateDto.numberOfTravelers) {
@@ -958,6 +977,12 @@ export class VisaApplicationsService {
       if (submitDto.notes) {
         application.notes = submitDto.notes;
       }
+
+      // Clear email tracking when application is submitted
+      application.emailCaptured = null;
+      application.emailCapturedAt = null;
+      application.pendingReminderSentAt = null;
+      application.couponEmailSentAt = null;
 
       const result = await this.applicationRepo.save(application);
 
@@ -1491,6 +1516,11 @@ export class VisaApplicationsService {
         status: 'Additional Info required', // Default status when submitted
         submittedAt: new Date(),
         notes: submitDto.notes,
+        // Clear email tracking when application is submitted
+        emailCaptured: null,
+        emailCapturedAt: null,
+        pendingReminderSentAt: null,
+        couponEmailSentAt: null,
       });
 
       const savedApplication = await queryRunner.manager.save(application) as VisaApplication;
