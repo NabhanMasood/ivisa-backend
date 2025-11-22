@@ -14,13 +14,13 @@ export class Nationality {
   @Column()
   productName: string; // selected visa product
 
-  @Column({ nullable: true })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   govtFee: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   serviceFee: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   totalAmount: number;
 
   @CreateDateColumn()
