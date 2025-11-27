@@ -10,7 +10,7 @@ import { SettingsService } from './settings/settings.service';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Configure CORS with explicit origins
+  // Configure CORS with explicit originsss
   const allowedOrigins: string[] = [
     'https://ivisa123.vercel.app',
     'https://ivisa123-landing.vercel.app',
