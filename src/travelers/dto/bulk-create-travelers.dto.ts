@@ -17,7 +17,7 @@ class TravelerDataDto {
   lastName: string;
 
   @IsOptional()
-  @IsEmail({}, { message: 'Please provide a valid email' }) 
+  @IsEmail({}, { message: 'Please provide a valid email' })
   email?: string;
 
   @IsNotEmpty()

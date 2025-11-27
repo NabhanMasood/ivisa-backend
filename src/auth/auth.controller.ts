@@ -5,6 +5,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { CreateSubadminDto } from './dto/create-subadmin.dto';
 import { UpdateSubadminDto } from './dto/update-subadmin.dto';
 
@@ -161,6 +162,18 @@ export class AuthController {
       customerId,
       changeEmailDto.newEmail,
       changeEmailDto.password,
+    );
+  }
+
+  // Account deletion endpoint for customers
+  @Delete('customer/:customerId/delete-account')
+  async deleteAccount(
+    @Param('customerId', ParseIntPipe) customerId: number,
+    @Body() deleteAccountDto: DeleteAccountDto,
+  ) {
+    return this.authService.deleteAccount(
+      customerId,
+      deleteAccountDto.password,
     );
   }
 

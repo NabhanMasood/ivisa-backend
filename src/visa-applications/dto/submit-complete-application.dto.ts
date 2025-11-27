@@ -123,6 +123,10 @@ class CompletePaymentDto {
 }
 
 export class SubmitCompleteApplicationDto {
+  @IsNumber()
+  @IsOptional()
+  applicationId?: number;
+
   // Trip Info (Step 1)
   @IsNumber()
   @IsOptional()

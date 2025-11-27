@@ -165,23 +165,69 @@ export class VisaApplicationsService {
       const serviceFee =
         createDto.serviceFee ||
         visaProduct.serviceFee * createDto.numberOfTravelers;
-      const totalAmount = governmentFee + serviceFee;
+      const processingFee = createDto.processingFee || 0;
+      const totalAmount = governmentFee + serviceFee + processingFee;
+
+      // Extract travelers and draftData from DTO (if provided) before creating application
+      const { travelers, draftData, currentStep, ...applicationData } = createDto;
 
       // Create application
       const application = this.applicationRepo.create({
-        ...createDto,
+        ...applicationData,
         applicationNumber,
         governmentFee,
         serviceFee,
+        processingFee,
+        processingFeeId: createDto.processingFeeId || null,
+        processingType: createDto.processingType || null,
+        processingTime: createDto.processingTime || null,
         totalAmount,
-        processingFee: 0,
         status: 'draft',
         // Capture email if provided for pending reminders
         emailCaptured: createDto.email || customer.email || null,
         emailCapturedAt: (createDto.email || customer.email) ? new Date() : null,
+        // Store draft data if provided
+        draftData: draftData || null,
+        currentStep: currentStep || draftData?.currentStep || 1, // Default to step 1
       } as Partial<VisaApplication>);
 
       const result = await this.applicationRepo.save(application);
+
+      // Save travelers if provided
+      if (travelers && travelers.length > 0) {
+        // Validate number of travelers matches
+        if (travelers.length > result.numberOfTravelers) {
+          throw new BadRequestException(
+            `Number of travelers (${travelers.length}) exceeds specified numberOfTravelers (${result.numberOfTravelers})`,
+          );
+        }
+
+        // Create travelers (only save if required fields are present)
+        const travelerEntities = travelers
+          .filter((t) => t.firstName && t.lastName && t.dateOfBirth) // Only save travelers with required fields
+          .map((travelerDto) =>
+            this.travelerRepo.create({
+              applicationId: result.id,
+              firstName: travelerDto.firstName,
+              lastName: travelerDto.lastName,
+              email: travelerDto.email,
+              dateOfBirth: new Date(travelerDto.dateOfBirth!),
+              passportNationality: travelerDto.passportNationality,
+              passportNumber: travelerDto.passportNumber,
+              passportExpiryDate: travelerDto.passportExpiryDate
+                ? new Date(travelerDto.passportExpiryDate)
+                : undefined,
+              residenceCountry: travelerDto.residenceCountry,
+              hasSchengenVisa: travelerDto.hasSchengenVisa || false,
+              placeOfBirth: travelerDto.placeOfBirth,
+              notes: travelerDto.notes,
+            }),
+          );
+
+        if (travelerEntities.length > 0) {
+          await this.travelerRepo.save(travelerEntities);
+        }
+      }
 
       return {
         status: true,
@@ -519,6 +565,9 @@ export class VisaApplicationsService {
         })(),
         createdAt: application.createdAt,
         updatedAt: application.updatedAt,
+        // Include draft data for step-by-step saving
+        draftData: application.draftData || {},
+        currentStep: application.currentStep || application.draftData?.currentStep || null,
       },
     };
   }
@@ -629,23 +678,120 @@ export class VisaApplicationsService {
         }
       }
 
-      // Update application (exclude email from updateDto to handle separately)
-      const { email, ...restUpdateDto } = updateDto;
+      // Extract travelers and draft data from updateDto before updating application
+      const { email, travelers, draftData, currentStep, step1Data, step2Data, step3Data, step4Data, step5Data, ...restUpdateDto } = updateDto;
+
+      // Handle draftData - merge with existing draftData instead of overwriting
+      if (draftData || step1Data || step2Data || step3Data || step4Data || step5Data || currentStep !== undefined) {
+        const existingDraftData = application.draftData || {};
+
+        // If complete draftData is provided, merge it
+        if (draftData) {
+          application.draftData = {
+            ...existingDraftData,
+            ...draftData,
+            // Preserve currentStep if not provided in new draftData
+            currentStep: draftData.currentStep !== undefined ? draftData.currentStep : (existingDraftData.currentStep || currentStep),
+          };
+        } else {
+          // If individual step data is provided, merge into draftData
+          application.draftData = {
+            ...existingDraftData,
+            ...(step1Data && { step1: step1Data }),
+            ...(step2Data && { step2: step2Data }),
+            ...(step3Data && { step3: step3Data }),
+            ...(step4Data && { step4: step4Data }),
+            ...(step5Data && { step5: step5Data }),
+            currentStep: currentStep !== undefined ? currentStep : existingDraftData.currentStep,
+          };
+        }
+
+        // Also update the currentStep field directly for easy querying
+        if (currentStep !== undefined) {
+          application.currentStep = currentStep;
+        } else if (application.draftData?.currentStep !== undefined) {
+          application.currentStep = application.draftData.currentStep;
+        }
+      }
+
+      // Update processing fields if provided
+      if (restUpdateDto.processingType !== undefined) {
+        application.processingType = restUpdateDto.processingType;
+      }
+      if (restUpdateDto.processingTime !== undefined) {
+        application.processingTime = restUpdateDto.processingTime;
+      }
+      if (restUpdateDto.processingFee !== undefined) {
+        application.processingFee = restUpdateDto.processingFee;
+      }
+      if (restUpdateDto.processingFeeId !== undefined) {
+        application.processingFeeId = restUpdateDto.processingFeeId;
+      }
+
+      // Update application (exclude email, travelers, and draft data from updateDto to handle separately)
       Object.assign(application, restUpdateDto);
 
-      // Recalculate fees if numberOfTravelers changed
-      if (updateDto.numberOfTravelers) {
+      // Recalculate fees if numberOfTravelers or processingFee changed
+      if (updateDto.numberOfTravelers || updateDto.processingFee !== undefined) {
         application.governmentFee =
-          application.visaProduct.govtFee * updateDto.numberOfTravelers;
+          application.visaProduct.govtFee * (updateDto.numberOfTravelers || application.numberOfTravelers);
         application.serviceFee =
-          application.visaProduct.serviceFee * updateDto.numberOfTravelers;
+          application.visaProduct.serviceFee * (updateDto.numberOfTravelers || application.numberOfTravelers);
         application.totalAmount =
           application.governmentFee +
           application.serviceFee +
-          application.processingFee;
+          (updateDto.processingFee !== undefined ? updateDto.processingFee : application.processingFee);
       }
 
       const result = await this.applicationRepo.save(application);
+
+      // Handle travelers update if provided
+      if (travelers !== undefined) {
+        // Validate number of travelers matches
+        if (travelers.length > result.numberOfTravelers) {
+          throw new BadRequestException(
+            `Number of travelers (${travelers.length}) exceeds specified numberOfTravelers (${result.numberOfTravelers})`,
+          );
+        }
+
+        // Get existing travelers
+        const existingTravelers = await this.travelerRepo.find({
+          where: { applicationId: result.id },
+        });
+
+        // Delete existing travelers if we're replacing them
+        if (existingTravelers.length > 0) {
+          await this.travelerRepo.remove(existingTravelers);
+        }
+
+        // Create new travelers if provided (only save if required fields are present)
+        if (travelers.length > 0) {
+          const travelerEntities = travelers
+            .filter((t) => t.firstName && t.lastName && t.dateOfBirth) // Only save travelers with required fields
+            .map((travelerDto) =>
+              this.travelerRepo.create({
+                applicationId: result.id,
+                firstName: travelerDto.firstName,
+                lastName: travelerDto.lastName,
+                email: travelerDto.email,
+                dateOfBirth: new Date(travelerDto.dateOfBirth!),
+                passportNationality: travelerDto.passportNationality,
+                passportNumber: travelerDto.passportNumber,
+                passportExpiryDate: travelerDto.passportExpiryDate
+                  ? new Date(travelerDto.passportExpiryDate)
+                  : undefined,
+                residenceCountry: travelerDto.residenceCountry,
+                hasSchengenVisa: travelerDto.hasSchengenVisa || false,
+                placeOfBirth: travelerDto.placeOfBirth,
+                notes: travelerDto.notes,
+              }),
+            );
+
+          if (travelerEntities.length > 0) {
+            await this.travelerRepo.save(travelerEntities);
+          }
+        }
+      }
 
       return {
         status: true,
@@ -811,7 +957,7 @@ export class VisaApplicationsService {
             applicationWithCustomer.customer.fullname,
             applicationWithCustomer.applicationNumber,
             trackingUrl,
-            application.notes,
+            application.notes ?? undefined,
           ).catch(error => {
             console.error('Failed to send additional info required email:', error);
           });
@@ -821,7 +967,7 @@ export class VisaApplicationsService {
             applicationWithCustomer.customer.fullname,
             applicationWithCustomer.applicationNumber,
             trackingUrl,
-            application.notes,
+            application.notes ?? undefined,
           ).catch(error => {
             console.error('Failed to send resubmission required email:', error);
           });
@@ -1370,6 +1516,27 @@ export class VisaApplicationsService {
       }
 
       const firstTraveler = submitDto.travelers[0]; // Traveler 1 is the customer
+      const draftApplicationId = submitDto.applicationId;
+      let draftApplication: VisaApplication | null = null;
+
+      if (draftApplicationId) {
+        draftApplication = await queryRunner.manager.findOne(VisaApplication, {
+          where: { id: draftApplicationId },
+          relations: ['travelers'],
+        });
+
+        if (!draftApplication) {
+          throw new NotFoundException(
+            `Draft visa application with ID ${draftApplicationId} not found`,
+          );
+        }
+
+        if (draftApplication.status !== 'draft') {
+          throw new BadRequestException(
+            'Only draft visa applications can be finalized. Please restart the application.',
+          );
+        }
+      }
 
       // Debug: Log receiveUpdates value from payload
       console.log('🔍 DEBUG: firstTraveler.receiveUpdates from payload:', firstTraveler.receiveUpdates, typeof firstTraveler.receiveUpdates);
@@ -1446,6 +1613,18 @@ export class VisaApplicationsService {
       const savedCustomer = await queryRunner.manager.save(Customer, customer);
       customerId = savedCustomer.id;
 
+      // If no draftId was provided, attempt to reuse the newest draft for this customer/product combo
+      if (!draftApplication) {
+        draftApplication = await queryRunner.manager.findOne(VisaApplication, {
+          where: {
+            customerId,
+            visaProductId: submitDto.visaProductId,
+            status: 'draft',
+          },
+          order: { updatedAt: 'DESC' },
+        });
+      }
+
       // 3. Validate visa product exists
       const visaProduct = await this.visaProductRepo.findOne({
         where: { id: submitDto.visaProductId },
@@ -1468,15 +1647,31 @@ export class VisaApplicationsService {
         }
       }
 
+      // Validate visaType - use draft's visaType if submitDto.visaType is empty
+      let finalVisaType = submitDto.visaType;
+      if ((!finalVisaType || finalVisaType.trim() === '') && draftApplication?.visaType) {
+        finalVisaType = draftApplication.visaType;
+      }
+
+      // Final validation: visaType must be in the correct format
+      if (!finalVisaType || finalVisaType.trim() === '') {
+        throw new BadRequestException(
+          'Visa type is required. Expected format: "{validity}-{entryType}" (e.g., "30-single", "90-multiple", "180-single")',
+        );
+      }
+
+      if (!/^\d+-(single|multiple)$/.test(finalVisaType)) {
+        throw new BadRequestException(
+          `Invalid visa type: "${finalVisaType}". Expected format: "{validity}-{entryType}" (e.g., "30-single", "90-multiple", "180-single")`,
+        );
+      }
+
       // 4. Validate number of travelers matches
       if (submitDto.travelers.length !== submitDto.numberOfTravelers) {
         throw new BadRequestException(
           `Number of travelers (${submitDto.travelers.length}) does not match numberOfTravelers (${submitDto.numberOfTravelers})`,
         );
       }
-
-      // 5. Generate application number
-      const applicationNumber = await this.generateApplicationNumber();
 
       // 6. Use fees from DTO (frontend calculated these, possibly with nationality-specific pricing)
       // The frontend sends govtFee and serviceFee which may already be multiplied by numberOfTravelers
@@ -1497,36 +1692,79 @@ export class VisaApplicationsService {
         throw new BadRequestException('Total amount cannot exceed base amount');
       }
 
-      // 2. Create application (use customer's nationality from traveler 1)
-      const application = this.applicationRepo.create({
-        applicationNumber,
-        customerId: customerId,
-        visaProductId: submitDto.visaProductId,
-        nationality: savedCustomer.nationality || submitDto.nationality,
-        destinationCountry: submitDto.destinationCountry,
-        embassyId: submitDto.embassyId,
-        visaType: submitDto.visaType,
-        numberOfTravelers: submitDto.numberOfTravelers,
-        phoneNumber: savedCustomer.phoneNumber,
-        processingType: submitDto.processingType,
-        processingFee: submitDto.processingFee,
-        governmentFee,
-        serviceFee,
-        totalAmount, // Use discounted amount from payload
-        status: 'Additional Info required', // Default status when submitted
-        submittedAt: new Date(),
-        notes: submitDto.notes,
-        // Clear email tracking when application is submitted
-        emailCaptured: null,
-        emailCapturedAt: null,
-        pendingReminderSentAt: null,
-        couponEmailSentAt: null,
-      });
+      // 2. Create or update application (use customer's nationality from traveler 1)
+      let savedApplication: VisaApplication;
+      const submissionDate = new Date();
 
-      const savedApplication = await queryRunner.manager.save(application) as VisaApplication;
+      if (draftApplication) {
+        draftApplication.customerId = customerId!; // customerId is guaranteed to be set at this point
+        draftApplication.visaProductId = submitDto.visaProductId;
+        draftApplication.nationality = savedCustomer.nationality || submitDto.nationality;
+        draftApplication.destinationCountry = submitDto.destinationCountry;
+        draftApplication.embassyId = submitDto.embassyId ?? null;
+        // Use the validated finalVisaType
+        draftApplication.visaType = finalVisaType;
+        draftApplication.numberOfTravelers = submitDto.numberOfTravelers;
+        draftApplication.phoneNumber = savedCustomer.phoneNumber;
+        draftApplication.processingType = submitDto.processingType ?? null;
+        draftApplication.processingTime = submitDto.processingTime ?? null;
+        draftApplication.processingFee = submitDto.processingFee;
+        draftApplication.processingFeeId = submitDto.processingFeeId ?? null;
+        draftApplication.governmentFee = governmentFee;
+        draftApplication.serviceFee = serviceFee;
+        draftApplication.totalAmount = totalAmount;
+        draftApplication.status = 'Additional Info required';
+        draftApplication.submittedAt = submissionDate;
+        draftApplication.notes = submitDto.notes ?? null;
+        draftApplication.emailCaptured = null;
+        draftApplication.emailCapturedAt = null;
+        draftApplication.pendingReminderSentAt = null;
+        draftApplication.couponEmailSentAt = null;
+
+        const saved = await queryRunner.manager.save(
+          VisaApplication,
+          draftApplication,
+        );
+        savedApplication = Array.isArray(saved) ? saved[0] : saved;
+      } else {
+        const applicationNumber = await this.generateApplicationNumber();
+        const application = this.applicationRepo.create({
+          applicationNumber,
+          customerId: customerId!,
+          visaProductId: submitDto.visaProductId,
+          nationality: savedCustomer.nationality || submitDto.nationality,
+          destinationCountry: submitDto.destinationCountry,
+          embassyId: submitDto.embassyId ?? null,
+          visaType: finalVisaType,
+          numberOfTravelers: submitDto.numberOfTravelers,
+          phoneNumber: savedCustomer.phoneNumber,
+          processingType: submitDto.processingType ?? null,
+          processingTime: submitDto.processingTime ?? null,
+          processingFee: submitDto.processingFee,
+          processingFeeId: submitDto.processingFeeId ?? null,
+          governmentFee,
+          serviceFee,
+          totalAmount, // Use discounted amount from payload
+          status: 'Additional Info required', // Default status when submitted
+          submittedAt: submissionDate,
+          notes: submitDto.notes ?? null,
+          // Clear email tracking when application is submitted
+          emailCaptured: null,
+          emailCapturedAt: null,
+          pendingReminderSentAt: null,
+          couponEmailSentAt: null,
+        });
+
+        const saved = await queryRunner.manager.save(
+          VisaApplication,
+          application,
+        );
+        savedApplication = Array.isArray(saved) ? saved[0] : saved;
+      }
 
       // 3. Create travelers - ONLY travelers 2+ (traveler 1 is the customer, stored in customer table)
       // Skip the first traveler since they are the customer
+      await queryRunner.manager.delete(Traveler, { applicationId: savedApplication.id });
       const additionalTravelers = submitDto.travelers.slice(1).map((travelerData) => {
         return {
           applicationId: savedApplication.id,

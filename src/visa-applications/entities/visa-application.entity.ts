@@ -71,13 +71,13 @@ export class VisaApplication {
   numberOfTravelers: number;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
-  processingType: string;
+  processingType: string | null;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
-  processingTime: string;
+  processingTime: string | null;
 
   @Column({ type: 'int', nullable: true })
-  processingFeeId: number;
+  processingFeeId: number | null;
 
   @Column('decimal', { precision: 10, scale: 2, default: 0 })
   processingFee: number;
@@ -104,7 +104,7 @@ export class VisaApplication {
   rejectionReason: string;
 
   @Column({ nullable: true, type: 'text' })
-  notes: string;
+  notes: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
   resubmissionRequests?: ResubmissionRequest[] | null;
@@ -158,6 +158,20 @@ export class VisaApplication {
 
   @Column({ type: 'timestamp', nullable: true })
   couponEmailSentAt?: Date | null; // When coupon email was sent
+
+  // Step-by-step draft data storage
+  @Column({ type: 'jsonb', nullable: true })
+  draftData?: {
+    step1?: any; // Step 1: Trip info (nationality, destination, visaType, email, productDetails)
+    step2?: any; // Step 2: Travelers info (travelers array with personal details)
+    step3?: any; // Step 3: Passport details (passportDetails array)
+    step4?: any; // Step 4: Embassy selection (embassyId, embassy details)
+    step5?: any; // Step 5: Processing options (processingType, processingFee, etc.)
+    currentStep?: number; // Current step user is on (1-6)
+  } | null;
+
+  @Column({ type: 'int', nullable: true })
+  currentStep?: number | null; // Track which step user is on (1-6)
 
   @CreateDateColumn()
   createdAt: Date;

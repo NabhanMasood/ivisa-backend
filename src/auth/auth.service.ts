@@ -9,8 +9,11 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { CreateSubadminDto } from './dto/create-subadmin.dto';
 import { UpdateSubadminDto } from './dto/update-subadmin.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
+import { ReferralsService } from '../referrals/referrals.service';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +24,8 @@ export class AuthService {
     private readonly customerRepo: Repository<Customer>,
     private emailService: EmailService,
     private configService: ConfigService,
+    private referralsService: ReferralsService,
+    private dataSource: DataSource,
   ) { }
 
   /**
@@ -70,6 +75,14 @@ export class AuthService {
 
       const updatedCustomer = await this.customerRepo.save(existingCustomer);
 
+      // Process referral if this email was referred (asynchronously)
+      this.referralsService.processReferralSignup(updatedCustomer.email).catch(
+        error => {
+          console.error('Failed to process referral signup:', error);
+          // Don't fail registration if referral processing fails
+        }
+      );
+
       const token = jwt.sign(
         {
           id: updatedCustomer.id,
@@ -114,6 +127,14 @@ export class AuthService {
       },
       process.env.JWT_SECRET || 'SECRET_KEY',
       { expiresIn: '7d' },
+    );
+
+    // Process referral if this email was referred (asynchronously)
+    this.referralsService.processReferralSignup(savedCustomer.email).catch(
+      error => {
+        console.error('Failed to process referral signup:', error);
+        // Don't fail registration if referral processing fails
+      }
     );
 
     // Send welcome email (asynchronously)
@@ -247,6 +268,52 @@ export class AuthService {
       status: true,
       message: 'Email changed successfully',
     };
+  }
+
+  // ==================== ACCOUNT DELETION ====================
+  async deleteAccount(customerId: number, password: string) {
+    const customer = await this.customerRepo.findOne({ where: { id: customerId } });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    if (!customer.password) {
+      throw new BadRequestException('No password set for this account');
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, customer.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
+
+    // Use a transaction to ensure data integrity
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Note: Related data (VisaApplications, Payments, CardInfo) will be handled by CASCADE
+      // or you can manually delete them here if CASCADE is not configured
+      // For now, we'll rely on database CASCADE constraints if they exist
+
+      await queryRunner.manager.remove(Customer, customer);
+
+      await queryRunner.commitTransaction();
+
+      return {
+        status: true,
+        message: 'Account deleted successfully',
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw new BadRequestException(
+        error.message || 'Failed to delete account. Please try again.',
+      );
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   // ==================== ADMIN AUTH ====================

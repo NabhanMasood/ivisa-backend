@@ -19,6 +19,8 @@ import { CardInfoModule } from './card-info/card-info.module';
 import { CommonModule } from './common/common.module';
 import { EmailModule } from './email/email.module';
 import { SettingsModule } from './settings/settings.module';
+import { ReferralsModule } from './referrals/referrals.module';
+import { GuidesModule } from './guides/guides.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -93,6 +95,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     ProcessingOptionsModule,
     EmailModule,
     SettingsModule,
+    ReferralsModule,
+    GuidesModule,
   ], controllers: [AppController],
   providers: [AppService],
 })

@@ -1242,4 +1242,227 @@ iVisa123 Team`,
     // Implementation for regulatory updates
     // Similar structure to above methods
   }
+
+  /**
+   * Send confirmation email to referrer when they send a referral invitation
+   */
+  async sendReferralConfirmationEmail(
+    to: string,
+    referrerName: string,
+    referredEmail: string,
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL');
+
+    if (!fromEmail) {
+      this.logger.error('SENDGRID_FROM_EMAIL not configured');
+      return;
+    }
+
+    const msg = {
+      to,
+      from: fromEmail,
+      subject: 'Referral Invitation Sent Successfully',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
+            .content { background-color: #f9f9f9; padding: 30px; }
+            .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Referral Invitation Sent!</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${referrerName},</p>
+              <p>Thank you for referring a friend to iVisa123!</p>
+              
+              <div class="info-box">
+                <strong>Referral Details:</strong><br>
+                Email: ${referredEmail}
+              </div>
+              
+              <p>We've sent an invitation to <strong>${referredEmail}</strong>. Once they sign up and create an account, you'll receive a <strong>10% discount coupon</strong> as a thank you for your referral!</p>
+              
+              <p>You can track all your referrals in your account dashboard.</p>
+              
+              <div class="contact-info">
+                <strong>Questions?</strong><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
+              </div>
+              
+              <p>Best regards,<br>iVisa123 Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated email. Please do not reply to this message.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `Dear ${referrerName},
+
+Thank you for referring a friend to iVisa123!
+
+Referral Details:
+Email: ${referredEmail}
+
+We've sent an invitation to ${referredEmail}. Once they sign up and create an account, you'll receive a 10% discount coupon as a thank you for your referral!
+
+You can track all your referrals in your account dashboard.
+
+Questions?
+Customer Support: support@visa123.co.uk
+
+Best regards,
+iVisa123 Team`,
+    };
+
+    try {
+      await sgMail.send(msg);
+      this.logger.log(`Referral confirmation email sent to ${to}`);
+    } catch (error) {
+      this.logger.error(`Failed to send referral confirmation email to ${to}:`, error);
+    }
+  }
+
+  /**
+   * Send notification email to referrer when their referral signs up
+   * Includes the 10% discount coupon code
+   */
+  async sendReferralRewardEmail(
+    to: string,
+    referrerName: string,
+    referredEmail: string,
+    couponCode: string,
+    referralsUrl?: string,
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL');
+
+    if (!fromEmail) {
+      this.logger.error('SENDGRID_FROM_EMAIL not configured');
+      return;
+    }
+
+    const msg = {
+      to,
+      from: fromEmail,
+      subject: '🎉 Your Referral Signed Up - Here\'s Your Reward!',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
+            .content { background-color: #f9f9f9; padding: 30px; }
+            .success-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+            .coupon-box { background-color: #4CAF50; padding: 30px; border: 2px solid #4CAF50; margin: 20px 0; text-align: center; }
+            .coupon-box h2 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin-top: 0; }
+            .coupon-code { font-size: 32px; font-weight: bold; color: white; margin: 15px 0; letter-spacing: 2px; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🎉 Congratulations!</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${referrerName},</p>
+              <p>Great news! Your referral has signed up!</p>
+              
+              <div class="success-box">
+                <strong>Referral Details:</strong><br>
+                Email: ${referredEmail}<br>
+                Status: Signed Up ✓
+              </div>
+              
+              <div class="coupon-box">
+                <h2 style="margin-top: 0; color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600;">Your 10% Discount Coupon</h2>
+                <div class="coupon-code">${couponCode}</div>
+                <p style="color: white; font-size: 16px; margin: 10px 0;">Use this code on your next visa application to save 10%!</p>
+                <p style="font-size: 12px; color: white;">Valid for 90 days • Single use</p>
+              </div>
+              
+              ${referralsUrl ? `
+              <p style="text-align: center;">
+                <a href="${referralsUrl}" class="button">View All My Referrals</a>
+              </p>
+              ` : ''}
+              
+              <p>Thank you for helping us grow! You can use this coupon code on your next visa application to enjoy a 10% discount.</p>
+              
+              <p><strong>How to use your coupon:</strong></p>
+              <ul>
+                <li>Start a new visa application</li>
+                <li>At checkout, enter the coupon code: <strong>${couponCode}</strong></li>
+                <li>Enjoy your 10% discount!</li>
+              </ul>
+              
+              <div class="contact-info">
+                <strong>Questions?</strong><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
+              </div>
+              
+              <p>Best regards,<br>iVisa123 Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated email. Please do not reply to this message.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `Dear ${referrerName},
+
+Great news! Your referral has signed up!
+
+Referral Details:
+Email: ${referredEmail}
+Status: Signed Up ✓
+
+Your 10% Discount Coupon: ${couponCode}
+
+Use this code on your next visa application to save 10%!
+Valid for 90 days • Single use
+
+${referralsUrl ? `View all your referrals: ${referralsUrl}\n\n` : ''}Thank you for helping us grow! You can use this coupon code on your next visa application to enjoy a 10% discount.
+
+How to use your coupon:
+1. Start a new visa application
+2. At checkout, enter the coupon code: ${couponCode}
+3. Enjoy your 10% discount!
+
+Questions?
+Customer Support: support@visa123.co.uk
+
+Best regards,
+iVisa123 Team`,
+    };
+
+    try {
+      await sgMail.send(msg);
+      this.logger.log(`Referral reward email sent to ${to} with coupon ${couponCode}`);
+    } catch (error) {
+      this.logger.error(`Failed to send referral reward email to ${to}:`, error);
+    }
+  }
 }

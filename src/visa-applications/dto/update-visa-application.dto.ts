@@ -6,7 +6,60 @@ import {
   IsIn,
   Matches,
   IsEmail,
+  IsArray,
+  ValidateNested,
+  IsDateString,
+  IsBoolean,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+// Nested DTO for travelers in draft updates
+export class DraftTravelerDto {
+  @IsString()
+  @IsOptional()
+  firstName?: string;
+
+  @IsString()
+  @IsOptional()
+  lastName?: string;
+
+  @IsEmail({}, { message: 'Please provide a valid email' })
+  @IsOptional()
+  email?: string;
+
+  @IsDateString({}, { message: 'Date of birth must be a valid date' })
+  @IsOptional()
+  dateOfBirth?: string;
+
+  // Passport Details
+  @IsString()
+  @IsOptional()
+  passportNationality?: string;
+
+  @IsString()
+  @IsOptional()
+  passportNumber?: string;
+
+  @IsDateString()
+  @IsOptional()
+  passportExpiryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  residenceCountry?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  hasSchengenVisa?: boolean;
+
+  @IsString()
+  @IsOptional()
+  placeOfBirth?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+}
 
 export class UpdateVisaApplicationDto {
   @IsString()
@@ -71,4 +124,60 @@ export class UpdateVisaApplicationDto {
   @IsEmail({}, { message: 'Please provide a valid email' })
   @IsOptional()
   email?: string; // Email captured on first step for pending reminders
+
+  // Travelers data (Step 2 & 3) - for saving to draft
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DraftTravelerDto)
+  @IsOptional()
+  travelers?: DraftTravelerDto[];
+
+  // Processing selection (Step 5) - for saving to draft
+  @IsString()
+  @IsOptional()
+  processingType?: string;
+
+  @IsString()
+  @IsOptional()
+  processingTime?: string; // e.g., "5 days", "24 hours"
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  processingFee?: number;
+
+  @IsNumber()
+  @IsOptional()
+  processingFeeId?: number; // ID from processing_fees table
+
+  // Step-by-step draft data
+  @IsOptional()
+  draftData?: {
+    step1?: any;
+    step2?: any;
+    step3?: any;
+    step4?: any;
+    step5?: any;
+    currentStep?: number;
+  };
+
+  @IsNumber()
+  @IsOptional()
+  currentStep?: number; // Current step (1-6)
+
+  // Individual step data (alternative to draftData)
+  @IsOptional()
+  step1Data?: any; // Step 1 data
+
+  @IsOptional()
+  step2Data?: any; // Step 2 data
+
+  @IsOptional()
+  step3Data?: any; // Step 3 data
+
+  @IsOptional()
+  step4Data?: any; // Step 4 data
+
+  @IsOptional()
+  step5Data?: any; // Step 5 data
 }
