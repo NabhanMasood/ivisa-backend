@@ -1407,6 +1407,87 @@ export class VisaProductFieldsService {
     }
 
     // Check product fields (positive IDs or if no applicationId provided)
+    // ✅ FIX: If applicationId is provided, validate against the specific application's visa product
+    // This prevents finding the wrong field when the same field ID exists in multiple products
+    if (applicationId && fieldId > 0) {
+      const application = await this.applicationRepo.findOne({
+        where: { id: applicationId },
+        relations: ['visaProduct'],
+      });
+
+      if (!application) {
+        throw new NotFoundException(
+          `Application with ID ${applicationId} not found`,
+        );
+      }
+
+      const fields = application.visaProduct.fields || [];
+      const field = fields.find((f) => f.id === fieldId);
+
+      if (field) {
+        if (field.fieldType !== 'upload') {
+          throw new BadRequestException(
+            `Field ${fieldId} is not an upload field`,
+          );
+        }
+
+        if (field.isActive === false) {
+          throw new BadRequestException(`Field ${fieldId} is not active`);
+        }
+
+        // Validate file type if specified
+        if (field.allowedFileTypes && field.allowedFileTypes.length > 0) {
+          const fileExtension = file.originalname.split('.').pop()?.toLowerCase() || '';
+          const fileMimeType = file.mimetype.toLowerCase();
+
+          // Normalize allowed types: handle both extensions ('pdf', 'jpg') and MIME types ('application/pdf', 'image/jpeg')
+          const normalizedAllowedTypes = field.allowedFileTypes.map((type: string) => {
+            const normalized = type.toLowerCase().trim();
+            // If it's a MIME type, extract extension
+            if (normalized.includes('/')) {
+              // Map common MIME types to extensions
+              const mimeToExt: Record<string, string> = {
+                'application/pdf': 'pdf',
+                'image/jpeg': 'jpg',
+                'image/jpg': 'jpg',
+                'image/png': 'png',
+                'image/gif': 'gif',
+                'application/msword': 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+              };
+              return mimeToExt[normalized] || normalized.split('/')[1];
+            }
+            return normalized;
+          });
+
+          // Check if file extension or MIME type matches
+          const extensionMatches = normalizedAllowedTypes.includes(fileExtension);
+          const mimeMatches = field.allowedFileTypes.some((type: string) =>
+            fileMimeType.includes(type.toLowerCase())
+          );
+
+          if (!extensionMatches && !mimeMatches) {
+            throw new BadRequestException(
+              `File type ${fileExtension || fileMimeType} is not allowed. Allowed types: ${field.allowedFileTypes.join(', ')}`,
+            );
+          }
+        }
+
+        // Validate file size if specified (convert MB to bytes)
+        if (field.maxFileSizeMB) {
+          const maxSizeBytes = field.maxFileSizeMB * 1024 * 1024;
+          if (file.size > maxSizeBytes) {
+            throw new BadRequestException(
+              `File size exceeds maximum allowed size of ${field.maxFileSizeMB}MB`,
+            );
+          }
+        }
+
+        return; // Product field found and validated
+      }
+    }
+
+    // Fallback: Search all products (for backward compatibility when applicationId is not provided)
     const visaProducts = await this.visaProductRepo.find();
 
     for (const product of visaProducts) {
