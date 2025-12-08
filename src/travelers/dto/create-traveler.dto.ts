@@ -6,6 +6,7 @@ import {
   IsIn,
   IsOptional,
   IsNumber,
+  IsBoolean,
 } from 'class-validator';
 
 export class CreateTravelerDto {
@@ -57,4 +58,9 @@ export class CreateTravelerDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  // Flag to indicate if passport details should be added later
+  @IsBoolean()
+  @IsOptional()
+  addPassportDetailsLater?: boolean;
 }

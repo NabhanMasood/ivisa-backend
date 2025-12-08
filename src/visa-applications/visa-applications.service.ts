@@ -350,44 +350,304 @@ export class VisaApplicationsService {
    * Format application details (used by findOne and findByApplicationNumber)
    */
   private formatApplicationDetails(application: VisaApplication) {
-    // Reconstruct traveler 1 (the customer) from customer data
-    // Traveler 1 is stored in customer table, not in travelers table
-    const customerTraveler = application.customer ? {
-      firstName: application.customer.fullname.split(' ')[0] || '',
-      lastName: application.customer.fullname.split(' ').slice(1).join(' ') || '',
-      email: application.customer.email,
-      dateOfBirth: application.customer.dateOfBirth,
-      passportNationality: application.customer.passportNationality,
-      passportNumber: application.customer.passportNumber,
-      passportExpiryDate: application.customer.passportExpiryDate,
-      residenceCountry: application.customer.residenceCountry,
-      nationality: application.customer.nationality,
-      hasSchengenVisa: application.customer.hasSchengenVisa,
-      receiveUpdates: application.customer.receiveUpdates ?? false,
-    } : null;
+    // Find customer traveler record if it exists (created when addPassportDetailsLater is true)
+    // ✅ CRITICAL: When numberOfTravelers > 1, traveler 1 is ALWAYS the customer (primary applicant)
+    // However, traveler 1 might not have a Traveler record if there was an issue during submission
+    // Check: If numberOfTravelers > travelers.length, then traveler 1 is missing
 
-    // ✅ Format travelers WITH their fieldResponses
-    const formattedTravelers = (application.travelers || []).map(traveler => ({
-      id: traveler.id,
-      firstName: traveler.firstName,
-      lastName: traveler.lastName,
-      email: traveler.email,
-      dateOfBirth: traveler.dateOfBirth,
-      passportNationality: traveler.passportNationality,
-      passportNumber: traveler.passportNumber,
-      passportExpiryDate: traveler.passportExpiryDate,
-      residenceCountry: traveler.residenceCountry,
-      hasSchengenVisa: traveler.hasSchengenVisa,
-      receiveUpdates: traveler.receiveUpdates ?? false,
-      placeOfBirth: traveler.placeOfBirth,
-      notes: traveler.notes,
-      fieldResponses: traveler.fieldResponses || {},  // ✅ CRITICAL: Include fieldResponses
-    }));
+    let customerTravelerRecord: Traveler | null = null;
+    const travelersInDB = application.travelers?.length || 0;
+    const expectedTravelers = application.numberOfTravelers || 0;
+    const isTraveler1Missing = expectedTravelers > travelersInDB;
 
-    // Combine customer (traveler 1) with additional travelers
-    const allTravelers = customerTraveler
-      ? [customerTraveler, ...formattedTravelers]
-      : formattedTravelers;
+    console.log(`🔍 [TRAVELERS] Traveler count check: numberOfTravelers=${expectedTravelers}, travelersInDB=${travelersInDB}, isTraveler1Missing=${isTraveler1Missing}`);
+
+    if (isTraveler1Missing) {
+      // Traveler 1 is missing from Traveler records - we'll reconstruct from draft data
+      console.log(`⚠️ [TRAVELERS] Traveler 1 is missing from Traveler records. Will reconstruct from draft data.`);
+      customerTravelerRecord = null; // Explicitly set to null so we reconstruct
+    } else if (application.travelers && application.travelers.length > 0) {
+      // All travelers exist - identify traveler 1 by creation date
+      // Sort travelers by createdAt to get them in creation order
+      // The first created traveler is always traveler 1 (customer)
+      const sortedTravelers = [...application.travelers].sort((a, b) => {
+        const aDate = a.createdAt || new Date(0);
+        const bDate = b.createdAt || new Date(0);
+        return aDate.getTime() - bDate.getTime();
+      });
+
+      // The earliest traveler (by createdAt) is traveler 1 (customer)
+      const earliestTraveler = sortedTravelers[0];
+
+      // Also try email matching as secondary verification (but don't rely on it alone)
+      const emailMatchedTraveler = application.travelers.find(
+        (t) => t.email && application.customer?.email && t.email === application.customer.email
+      );
+
+      // Use email-matched traveler ONLY if it's also the earliest one
+      // Otherwise, use the earliest one (correct traveler 1 identification)
+      if (emailMatchedTraveler && emailMatchedTraveler.id === earliestTraveler.id) {
+        customerTravelerRecord = emailMatchedTraveler;
+        console.log(`✅ [TRAVELERS] Customer traveler identified by email AND creation date (ID: ${customerTravelerRecord.id})`);
+      } else if (emailMatchedTraveler) {
+        // Email matches a different traveler - this is wrong, use earliest instead
+        console.log(`⚠️ [TRAVELERS] Email matched traveler ${emailMatchedTraveler.id}, but earliest traveler is ${earliestTraveler.id}. Using earliest (correct traveler 1).`);
+        customerTravelerRecord = earliestTraveler;
+      } else {
+        // No email match - use earliest traveler (traveler 1)
+        customerTravelerRecord = earliestTraveler;
+        console.log(`✅ [TRAVELERS] Customer traveler identified by creation date only (ID: ${customerTravelerRecord.id})`);
+      }
+    } else if (application.numberOfTravelers === 1 && application.travelers?.length === 1) {
+      // Only 1 traveler - it's definitely the customer
+      customerTravelerRecord = application.travelers[0];
+    }
+
+    // ✅ CRITICAL: If numberOfTravelers = 1 and there's a customer Traveler record,
+    // use that Traveler record as the only traveler (don't duplicate customer)
+    let allTravelers: any[] = [];
+
+    if (application.numberOfTravelers === 1 && customerTravelerRecord) {
+      // Only 1 traveler and customer has a Traveler record: use the Traveler record
+      allTravelers = [{
+        id: customerTravelerRecord.id,
+        firstName: customerTravelerRecord.firstName,
+        lastName: customerTravelerRecord.lastName,
+        fullName: `${customerTravelerRecord.firstName} ${customerTravelerRecord.lastName}`,
+        email: customerTravelerRecord.email,
+        dateOfBirth: customerTravelerRecord.dateOfBirth,
+        passportNationality: customerTravelerRecord.passportNationality,
+        passportNumber: customerTravelerRecord.passportNumber,
+        passportExpiryDate: customerTravelerRecord.passportExpiryDate,
+        residenceCountry: customerTravelerRecord.residenceCountry,
+        hasSchengenVisa: customerTravelerRecord.hasSchengenVisa,
+        receiveUpdates: customerTravelerRecord.receiveUpdates ?? false,
+        placeOfBirth: customerTravelerRecord.placeOfBirth,
+        notes: customerTravelerRecord.notes,
+        fieldResponses: customerTravelerRecord.fieldResponses || {},
+        isCustomer: true, // This is the customer
+        customerId: application.customer?.id || null,
+      }];
+    } else if (application.numberOfTravelers === 1 && !customerTravelerRecord) {
+      // Only 1 traveler and no Traveler record
+      // ✅ Note: We can't reconstruct the traveler's actual name without Traveler record
+      // The customer.fullname is the account username, not the traveler's name
+      // For now, we'll use customer data but this is a limitation - ideally Traveler record should exist
+      // In practice, if addPassportDetailsLater=false, a Traveler record might not exist
+      // Check if we have any travelers in the array (shouldn't happen for numberOfTravelers=1 without customerTravelerRecord)
+      const fallbackTraveler = application.travelers?.[0];
+
+      const customerTraveler = application.customer ? {
+        id: fallbackTraveler?.id || null,
+        firstName: fallbackTraveler?.firstName || '', // ✅ Try to use Traveler record if it exists (even if not matched as customerTravelerRecord)
+        lastName: fallbackTraveler?.lastName || '', // ✅ Try to use Traveler record if it exists
+        fullName: fallbackTraveler ? `${fallbackTraveler.firstName} ${fallbackTraveler.lastName}` : '', // ✅ Use traveler name if available
+        email: application.customer.email,
+        dateOfBirth: fallbackTraveler?.dateOfBirth || application.customer.dateOfBirth,
+        passportNationality: fallbackTraveler?.passportNationality || application.customer.passportNationality,
+        passportNumber: fallbackTraveler?.passportNumber || application.customer.passportNumber,
+        passportExpiryDate: fallbackTraveler?.passportExpiryDate || application.customer.passportExpiryDate,
+        residenceCountry: fallbackTraveler?.residenceCountry || application.customer.residenceCountry,
+        nationality: fallbackTraveler?.passportNationality || application.customer.nationality,
+        hasSchengenVisa: fallbackTraveler?.hasSchengenVisa ?? application.customer.hasSchengenVisa,
+        receiveUpdates: fallbackTraveler?.receiveUpdates ?? application.customer.receiveUpdates ?? false,
+        placeOfBirth: fallbackTraveler?.placeOfBirth,
+        notes: fallbackTraveler?.notes,
+        fieldResponses: fallbackTraveler?.fieldResponses || {},
+        isCustomer: true,
+        customerId: application.customer.id,
+      } : null;
+      allTravelers = customerTraveler ? [customerTraveler] : [];
+    } else {
+      // Multiple travelers: customer is always traveler 1, then additional travelers
+
+      // ✅ If customer has a Traveler record, use it as the customer traveler
+      // Otherwise, reconstruct from customer data
+      let customerTraveler: any = null;
+
+      if (customerTravelerRecord) {
+        // Customer has a Traveler record: use it directly
+        customerTraveler = {
+          id: customerTravelerRecord.id,
+          firstName: customerTravelerRecord.firstName,
+          lastName: customerTravelerRecord.lastName,
+          fullName: `${customerTravelerRecord.firstName} ${customerTravelerRecord.lastName}`,
+          email: customerTravelerRecord.email,
+          dateOfBirth: customerTravelerRecord.dateOfBirth,
+          passportNationality: customerTravelerRecord.passportNationality,
+          passportNumber: customerTravelerRecord.passportNumber,
+          passportExpiryDate: customerTravelerRecord.passportExpiryDate,
+          residenceCountry: customerTravelerRecord.residenceCountry,
+          nationality: customerTravelerRecord.passportNationality, // Use passportNationality as nationality
+          hasSchengenVisa: customerTravelerRecord.hasSchengenVisa,
+          receiveUpdates: customerTravelerRecord.receiveUpdates ?? false,
+          placeOfBirth: customerTravelerRecord.placeOfBirth,
+          notes: customerTravelerRecord.notes,
+          fieldResponses: customerTravelerRecord.fieldResponses || {},
+          isCustomer: true,
+          customerId: application.customer?.id || null,
+        };
+      } else {
+        // No Traveler record found for customer - reconstruct from draft data
+        // ✅ Use draftData.step2.travelers[0] to get traveler 1's actual name
+        const draftTraveler1 = application.draftData?.step2?.travelers?.[0];
+
+        if (draftTraveler1 && application.customer) {
+          // Reconstruct from draft data - this has the actual traveler name
+          console.log(`✅ [TRAVELERS] Reconstructing traveler 1 from draft data:`, {
+            firstName: draftTraveler1.firstName,
+            lastName: draftTraveler1.lastName,
+            email: draftTraveler1.email,
+          });
+
+          // Parse date of birth from draft data (format: birthDate, birthMonth, birthYear)
+          let dateOfBirth: Date | null = null;
+          if (draftTraveler1.birthYear && draftTraveler1.birthMonth && draftTraveler1.birthDate) {
+            try {
+              const year = parseInt(draftTraveler1.birthYear);
+              const month = parseInt(draftTraveler1.birthMonth) - 1; // Month is 0-indexed
+              const date = parseInt(draftTraveler1.birthDate);
+              if (!isNaN(year) && !isNaN(month) && !isNaN(date)) {
+                dateOfBirth = new Date(year, month, date);
+                // Validate the date
+                if (isNaN(dateOfBirth.getTime())) {
+                  dateOfBirth = null;
+                }
+              }
+            } catch (e) {
+              console.warn(`⚠️ [TRAVELERS] Could not parse date of birth from draft data:`, e);
+            }
+          }
+
+          // Get passport details from step3
+          const draftPassport1 = application.draftData?.step3?.passportDetails?.[0];
+
+          // Parse passport expiry date if available
+          let passportExpiryDate: Date | null = null;
+          if (draftPassport1?.expiryYear && draftPassport1?.expiryMonth && draftPassport1?.expiryDate) {
+            try {
+              const year = parseInt(draftPassport1.expiryYear);
+              const month = parseInt(draftPassport1.expiryMonth) - 1;
+              const date = parseInt(draftPassport1.expiryDate);
+              if (!isNaN(year) && !isNaN(month) && !isNaN(date)) {
+                passportExpiryDate = new Date(year, month, date);
+                if (isNaN(passportExpiryDate.getTime())) {
+                  passportExpiryDate = null;
+                }
+              }
+            } catch (e) {
+              console.warn(`⚠️ [TRAVELERS] Could not parse passport expiry date from draft data:`, e);
+            }
+          }
+
+          customerTraveler = {
+            id: null, // No Traveler record exists
+            firstName: draftTraveler1.firstName || '', // ✅ Actual traveler name from draft
+            lastName: draftTraveler1.lastName || '', // ✅ Actual traveler name from draft
+            fullName: `${draftTraveler1.firstName || ''} ${draftTraveler1.lastName || ''}`.trim(), // ✅ Actual traveler name
+            email: draftTraveler1.email || application.customer.email,
+            dateOfBirth: dateOfBirth || application.customer.dateOfBirth,
+            passportNationality: draftPassport1?.nationality || application.customer.passportNationality,
+            passportNumber: draftPassport1?.passportNumber || application.customer.passportNumber,
+            passportExpiryDate: passportExpiryDate || application.customer.passportExpiryDate,
+            residenceCountry: draftPassport1?.residenceCountry || application.customer.residenceCountry,
+            nationality: draftPassport1?.nationality || application.customer.nationality,
+            hasSchengenVisa: draftPassport1?.hasSchengenVisa === 'yes' || draftPassport1?.hasSchengenVisa === true || application.customer.hasSchengenVisa || false,
+            receiveUpdates: draftTraveler1.receiveUpdates ?? application.customer.receiveUpdates ?? false,
+            placeOfBirth: null,
+            notes: null,
+            fieldResponses: {}, // No field responses if no Traveler record
+            isCustomer: true,
+            customerId: application.customer.id,
+          };
+        } else if (application.customer) {
+          // No draft data available - fallback to customer data (but we can't get traveler name)
+          console.warn(`⚠️ [TRAVELERS] No Traveler record and no draft data for traveler 1. Cannot determine traveler name. Customer account name: ${application.customer.fullname}`);
+          customerTraveler = {
+            id: null,
+            firstName: '', // ❌ Cannot determine - customer.fullname is account username, not traveler name
+            lastName: '', // ❌ Cannot determine
+            fullName: '', // ❌ Cannot determine
+            email: application.customer.email,
+            dateOfBirth: application.customer.dateOfBirth,
+            passportNationality: application.customer.passportNationality,
+            passportNumber: application.customer.passportNumber,
+            passportExpiryDate: application.customer.passportExpiryDate,
+            residenceCountry: application.customer.residenceCountry,
+            nationality: application.customer.nationality,
+            hasSchengenVisa: application.customer.hasSchengenVisa,
+            receiveUpdates: application.customer.receiveUpdates ?? false,
+            fieldResponses: {},
+            isCustomer: true,
+            customerId: application.customer.id,
+          };
+        }
+      }
+
+      // Exclude customer traveler from additional travelers
+      // ✅ CRITICAL: Only exclude travelers if customerTravelerRecord exists (i.e., traveler 1 has a Traveler record)
+      // If traveler 1 is missing (reconstructed from draft data), ALL existing Traveler records are additional travelers
+      const additionalTravelers = (application.travelers || []).filter(
+        (t) => {
+          // Only exclude if customerTravelerRecord exists (traveler 1 has a Traveler record)
+          // When traveler 1 is missing (customerTravelerRecord = null), ALL Traveler records are additional travelers
+          if (customerTravelerRecord && t.id === customerTravelerRecord.id) {
+            return false; // Exclude the customerTravelerRecord
+          }
+          // ✅ Don't exclude any travelers when traveler 1 is missing (isTraveler1Missing = true)
+          // All existing Traveler records are additional travelers (travelers 2, 3, etc.)
+          return true;
+        }
+      );
+
+      console.log(`🔍 [TRAVELERS] Additional travelers after filtering: ${additionalTravelers.length}`, additionalTravelers.map(t => ({
+        id: t.id,
+        firstName: t.firstName,
+        lastName: t.lastName,
+      })));
+
+      const formattedTravelers = additionalTravelers.map(traveler => ({
+        id: traveler.id,
+        firstName: traveler.firstName,
+        lastName: traveler.lastName,
+        fullName: `${traveler.firstName} ${traveler.lastName}`,
+        email: traveler.email,
+        dateOfBirth: traveler.dateOfBirth,
+        passportNationality: traveler.passportNationality,
+        passportNumber: traveler.passportNumber,
+        passportExpiryDate: traveler.passportExpiryDate,
+        residenceCountry: traveler.residenceCountry,
+        hasSchengenVisa: traveler.hasSchengenVisa,
+        receiveUpdates: traveler.receiveUpdates ?? false,
+        placeOfBirth: traveler.placeOfBirth,
+        notes: traveler.notes,
+        fieldResponses: traveler.fieldResponses || {},
+        isCustomer: false,
+      }));
+
+      // Combine customer (traveler 1) with additional travelers
+      allTravelers = customerTraveler
+        ? [customerTraveler, ...formattedTravelers]
+        : formattedTravelers;
+
+      console.log(`🔍 [TRAVELERS] Application ${application.id}: numberOfTravelers=${application.numberOfTravelers}, totalTravelersInDB=${application.travelers?.length || 0}, customerTravelerRecord=${customerTravelerRecord ? 'exists' : 'none'}, allTravelersCount=${allTravelers.length}`);
+      console.log(`🔍 [TRAVELERS DETAIL] First traveler (customer traveler):`, allTravelers[0] ? {
+        id: allTravelers[0].id,
+        firstName: allTravelers[0].firstName,
+        lastName: allTravelers[0].lastName,
+        fullName: allTravelers[0].fullName,
+        email: allTravelers[0].email,
+        isCustomer: allTravelers[0].isCustomer,
+      } : 'NONE');
+      console.log(`🔍 [TRAVELERS DETAIL] All travelers summary:`, allTravelers.map((t, idx) => ({
+        index: idx,
+        id: t.id,
+        firstName: t.firstName,
+        lastName: t.lastName,
+        fullName: t.fullName,
+        isCustomer: t.isCustomer,
+      })));
+    }
 
     return {
       status: true,
@@ -728,19 +988,77 @@ export class VisaApplicationsService {
         application.processingFeeId = restUpdateDto.processingFeeId;
       }
 
-      // Update application (exclude email, travelers, and draft data from updateDto to handle separately)
+      // Protect amount fields - never overwrite them once set (especially after payment)
+      // Store current amount values before any updates
+      const existingAmounts = {
+        governmentFee: application.governmentFee,
+        serviceFee: application.serviceFee,
+        totalAmount: application.totalAmount,
+        processingFee: application.processingFee,
+      };
+
+      console.log('🔒 [UPDATE PROTECTION] Current amounts before update:', {
+        applicationId: application.id,
+        status: application.status,
+        governmentFee: existingAmounts.governmentFee,
+        serviceFee: existingAmounts.serviceFee,
+        totalAmount: existingAmounts.totalAmount,
+        processingFee: existingAmounts.processingFee,
+      });
+
+      // Update application (exclude email, travelers, draft data, and amount fields from updateDto)
       Object.assign(application, restUpdateDto);
 
-      // Recalculate fees if numberOfTravelers or processingFee changed
-      if (updateDto.numberOfTravelers || updateDto.processingFee !== undefined) {
-        application.governmentFee =
-          application.visaProduct.govtFee * (updateDto.numberOfTravelers || application.numberOfTravelers);
-        application.serviceFee =
-          application.visaProduct.serviceFee * (updateDto.numberOfTravelers || application.numberOfTravelers);
-        application.totalAmount =
-          application.governmentFee +
-          application.serviceFee +
-          (updateDto.processingFee !== undefined ? updateDto.processingFee : application.processingFee);
+      // CRITICAL: Protect amount fields - never overwrite them if they're already set
+      // Only recalculate fees for DRAFT applications, and only if amounts aren't already set
+      const isDraft = application.status === 'draft';
+      const totalAmountNum = Number(existingAmounts.totalAmount);
+      const amountsAlreadySet =
+        existingAmounts.totalAmount !== null &&
+        existingAmounts.totalAmount !== undefined &&
+        !isNaN(totalAmountNum) &&
+        totalAmountNum > 0;
+
+      console.log('🔒 [UPDATE PROTECTION] Amount protection check:', {
+        isDraft,
+        amountsAlreadySet,
+        totalAmountValue: existingAmounts.totalAmount,
+        totalAmountAsNumber: totalAmountNum,
+      });
+
+      if (isDraft && !amountsAlreadySet && (updateDto.numberOfTravelers || updateDto.processingFee !== undefined)) {
+        // Only recalculate for draft applications without existing amounts
+        if (application.visaProduct && application.visaProduct.govtFee && application.visaProduct.serviceFee) {
+          const numTravelers = updateDto.numberOfTravelers || application.numberOfTravelers;
+          const procFee = updateDto.processingFee !== undefined ? updateDto.processingFee : application.processingFee;
+
+          const govtFee = Number(application.visaProduct.govtFee) * Number(numTravelers);
+          const svcFee = Number(application.visaProduct.serviceFee) * Number(numTravelers);
+          const total = govtFee + svcFee + Number(procFee || 0);
+
+          application.governmentFee = govtFee;
+          application.serviceFee = svcFee;
+          application.totalAmount = total;
+
+          console.log('🔒 [UPDATE PROTECTION] Recalculated amounts for draft:', {
+            governmentFee: govtFee,
+            serviceFee: svcFee,
+            totalAmount: total,
+          });
+        }
+      } else if (amountsAlreadySet) {
+        // Restore original amounts if they were set - never overwrite paid amounts
+        application.governmentFee = existingAmounts.governmentFee;
+        application.serviceFee = existingAmounts.serviceFee;
+        application.totalAmount = existingAmounts.totalAmount;
+        application.processingFee = existingAmounts.processingFee;
+
+        console.log('🔒 [UPDATE PROTECTION] Preserved existing amounts (payment already made):', {
+          governmentFee: existingAmounts.governmentFee,
+          serviceFee: existingAmounts.serviceFee,
+          totalAmount: existingAmounts.totalAmount,
+          processingFee: existingAmounts.processingFee,
+        });
       }
 
       const result = await this.applicationRepo.save(application);
@@ -1267,43 +1585,177 @@ export class VisaApplicationsService {
 
       // ✅ Format applications with reconstructed traveler data (like findOne does)
       const formattedApplications = applications.map((app) => {
-        // Reconstruct traveler 1 (the customer) from customer data
-        const customerTraveler = app.customer ? {
-          firstName: app.customer.fullname.split(' ')[0] || '',
-          lastName: app.customer.fullname.split(' ').slice(1).join(' ') || '',
-          email: app.customer.email,
-          dateOfBirth: app.customer.dateOfBirth,
-          passportNationality: app.customer.passportNationality,
-          passportNumber: app.customer.passportNumber,
-          passportExpiryDate: app.customer.passportExpiryDate,
-          residenceCountry: app.customer.residenceCountry,
-          nationality: app.customer.nationality,
-          hasSchengenVisa: app.customer.hasSchengenVisa,
-          receiveUpdates: app.customer.receiveUpdates ?? false,
-        } : null;
+        // Find customer traveler record if it exists (created when addPassportDetailsLater is true)
+        // ✅ CRITICAL: When numberOfTravelers > 1, traveler 1 is ALWAYS the customer (primary applicant)
+        // The correct way to identify traveler 1 is by creation date (earliest createdAt), NOT by email matching
+        // Email matching can be unreliable because different travelers might use the same email
 
-        // Format additional travelers (travelers 2+)
-        const formattedTravelers = (app.travelers || []).map(traveler => ({
-          id: traveler.id,
-          firstName: traveler.firstName,
-          lastName: traveler.lastName,
-          email: traveler.email,
-          dateOfBirth: traveler.dateOfBirth,
-          passportNationality: traveler.passportNationality,
-          passportNumber: traveler.passportNumber,
-          passportExpiryDate: traveler.passportExpiryDate,
-          residenceCountry: traveler.residenceCountry,
-          hasSchengenVisa: traveler.hasSchengenVisa,
-          receiveUpdates: traveler.receiveUpdates ?? false,
-          placeOfBirth: traveler.placeOfBirth,
-          notes: traveler.notes,
-          fieldResponses: traveler.fieldResponses || {},
-        }));
+        let customerTravelerRecord: Traveler | null = null;
 
-        // Combine customer (traveler 1) with additional travelers
-        const allTravelers = customerTraveler
-          ? [customerTraveler, ...formattedTravelers]
-          : formattedTravelers;
+        if (app.travelers && app.travelers.length > 0) {
+          // Sort travelers by createdAt to get them in creation order
+          // The first created traveler is always traveler 1 (customer)
+          const sortedTravelers = [...app.travelers].sort((a, b) => {
+            const aDate = a.createdAt || new Date(0);
+            const bDate = b.createdAt || new Date(0);
+            return aDate.getTime() - bDate.getTime();
+          });
+
+          // The earliest traveler (by createdAt) is traveler 1 (customer)
+          const earliestTraveler = sortedTravelers[0];
+
+          // Also try email matching as secondary verification (but don't rely on it alone)
+          const emailMatchedTraveler = app.travelers.find(
+            (t) => t.email && app.customer?.email && t.email === app.customer.email
+          );
+
+          // Use email-matched traveler ONLY if it's also the earliest one
+          // Otherwise, use the earliest one (correct traveler 1 identification)
+          if (emailMatchedTraveler && emailMatchedTraveler.id === earliestTraveler.id) {
+            customerTravelerRecord = emailMatchedTraveler;
+          } else if (emailMatchedTraveler) {
+            // Email matches a different traveler - this is wrong, use earliest instead
+            customerTravelerRecord = earliestTraveler;
+          } else {
+            // No email match - use earliest traveler (traveler 1)
+            customerTravelerRecord = earliestTraveler;
+          }
+        } else if (app.numberOfTravelers === 1 && app.travelers?.length === 1) {
+          // Only 1 traveler - it's definitely the customer
+          customerTravelerRecord = app.travelers[0];
+        }
+
+        // ✅ CRITICAL: If numberOfTravelers = 1 and there's a customer Traveler record,
+        // use that Traveler record as the only traveler (don't duplicate customer)
+        let allTravelers: any[] = [];
+
+        if (app.numberOfTravelers === 1 && customerTravelerRecord) {
+          // Only 1 traveler and customer has a Traveler record: use the Traveler record
+          allTravelers = [{
+            id: customerTravelerRecord.id,
+            firstName: customerTravelerRecord.firstName,
+            lastName: customerTravelerRecord.lastName,
+            fullName: `${customerTravelerRecord.firstName} ${customerTravelerRecord.lastName}`,
+            email: customerTravelerRecord.email,
+            dateOfBirth: customerTravelerRecord.dateOfBirth,
+            passportNationality: customerTravelerRecord.passportNationality,
+            passportNumber: customerTravelerRecord.passportNumber,
+            passportExpiryDate: customerTravelerRecord.passportExpiryDate,
+            residenceCountry: customerTravelerRecord.residenceCountry,
+            hasSchengenVisa: customerTravelerRecord.hasSchengenVisa,
+            receiveUpdates: customerTravelerRecord.receiveUpdates ?? false,
+            placeOfBirth: customerTravelerRecord.placeOfBirth,
+            notes: customerTravelerRecord.notes,
+            fieldResponses: customerTravelerRecord.fieldResponses || {},
+            isCustomer: true,
+            customerId: app.customer?.id || null,
+          }];
+        } else if (app.numberOfTravelers === 1 && !customerTravelerRecord) {
+          // Only 1 traveler and no Traveler record: reconstruct from customer data
+          const customerTraveler = app.customer ? {
+            id: null,
+            firstName: app.customer.fullname.split(' ')[0] || '',
+            lastName: app.customer.fullname.split(' ').slice(1).join(' ') || '',
+            fullName: app.customer.fullname,
+            email: app.customer.email,
+            dateOfBirth: app.customer.dateOfBirth,
+            passportNationality: app.customer.passportNationality,
+            passportNumber: app.customer.passportNumber,
+            passportExpiryDate: app.customer.passportExpiryDate,
+            residenceCountry: app.customer.residenceCountry,
+            nationality: app.customer.nationality,
+            hasSchengenVisa: app.customer.hasSchengenVisa,
+            receiveUpdates: app.customer.receiveUpdates ?? false,
+            fieldResponses: {},
+            isCustomer: true,
+            customerId: app.customer.id,
+          } : null;
+          allTravelers = customerTraveler ? [customerTraveler] : [];
+        } else {
+          // Multiple travelers: customer is always traveler 1, then additional travelers
+
+          // ✅ If customer has a Traveler record, use it as the customer traveler
+          // Otherwise, reconstruct from customer data
+          let customerTraveler: any = null;
+
+          if (customerTravelerRecord) {
+            // Customer has a Traveler record: use it directly
+            customerTraveler = {
+              id: customerTravelerRecord.id,
+              firstName: customerTravelerRecord.firstName,
+              lastName: customerTravelerRecord.lastName,
+              fullName: `${customerTravelerRecord.firstName} ${customerTravelerRecord.lastName}`,
+              email: customerTravelerRecord.email,
+              dateOfBirth: customerTravelerRecord.dateOfBirth,
+              passportNationality: customerTravelerRecord.passportNationality,
+              passportNumber: customerTravelerRecord.passportNumber,
+              passportExpiryDate: customerTravelerRecord.passportExpiryDate,
+              residenceCountry: customerTravelerRecord.residenceCountry,
+              nationality: customerTravelerRecord.passportNationality, // Use passportNationality as nationality
+              hasSchengenVisa: customerTravelerRecord.hasSchengenVisa,
+              receiveUpdates: customerTravelerRecord.receiveUpdates ?? false,
+              placeOfBirth: customerTravelerRecord.placeOfBirth,
+              notes: customerTravelerRecord.notes,
+              fieldResponses: customerTravelerRecord.fieldResponses || {},
+              isCustomer: true,
+              customerId: app.customer?.id || null,
+            };
+          } else if (app.customer) {
+            // No Traveler record: try to find any traveler that might be the customer
+            // ✅ Don't use customer.fullname (account username) - it's not the traveler's name
+            const fallbackTraveler = app.travelers?.[0]; // First traveler might be the customer traveler
+
+            customerTraveler = {
+              id: fallbackTraveler?.id || null,
+              firstName: fallbackTraveler?.firstName || '', // ✅ Use traveler name, not account name
+              lastName: fallbackTraveler?.lastName || '', // ✅ Use traveler name, not account name
+              fullName: fallbackTraveler ? `${fallbackTraveler.firstName} ${fallbackTraveler.lastName}` : '', // ✅ Use traveler name
+              email: app.customer.email,
+              dateOfBirth: fallbackTraveler?.dateOfBirth || app.customer.dateOfBirth,
+              passportNationality: fallbackTraveler?.passportNationality || app.customer.passportNationality,
+              passportNumber: fallbackTraveler?.passportNumber || app.customer.passportNumber,
+              passportExpiryDate: fallbackTraveler?.passportExpiryDate || app.customer.passportExpiryDate,
+              residenceCountry: fallbackTraveler?.residenceCountry || app.customer.residenceCountry,
+              nationality: fallbackTraveler?.passportNationality || app.customer.nationality,
+              hasSchengenVisa: fallbackTraveler?.hasSchengenVisa ?? app.customer.hasSchengenVisa,
+              receiveUpdates: fallbackTraveler?.receiveUpdates ?? app.customer.receiveUpdates ?? false,
+              placeOfBirth: fallbackTraveler?.placeOfBirth,
+              notes: fallbackTraveler?.notes,
+              fieldResponses: fallbackTraveler?.fieldResponses || {},
+              isCustomer: true,
+              customerId: app.customer.id,
+            };
+          }
+
+          // Exclude customer traveler record from additional travelers if it was found
+          const additionalTravelers = (app.travelers || []).filter(
+            (t) => !customerTravelerRecord || t.id !== customerTravelerRecord.id
+          );
+
+          const formattedTravelers = additionalTravelers.map(traveler => ({
+            id: traveler.id,
+            firstName: traveler.firstName,
+            lastName: traveler.lastName,
+            fullName: `${traveler.firstName} ${traveler.lastName}`,
+            email: traveler.email,
+            dateOfBirth: traveler.dateOfBirth,
+            passportNationality: traveler.passportNationality,
+            passportNumber: traveler.passportNumber,
+            passportExpiryDate: traveler.passportExpiryDate,
+            residenceCountry: traveler.residenceCountry,
+            hasSchengenVisa: traveler.hasSchengenVisa,
+            receiveUpdates: traveler.receiveUpdates ?? false,
+            placeOfBirth: traveler.placeOfBirth,
+            notes: traveler.notes,
+            fieldResponses: traveler.fieldResponses || {},
+            isCustomer: false,
+          }));
+
+          // Combine customer (traveler 1) with additional travelers
+          allTravelers = customerTraveler
+            ? [customerTraveler, ...formattedTravelers]
+            : formattedTravelers;
+        }
 
         return {
           id: app.id,
@@ -1502,6 +1954,20 @@ export class VisaApplicationsService {
    * Auto-creates customer from first traveler if customerId not provided
    */
   async submitComplete(submitDto: SubmitCompleteApplicationDto) {
+    // Log received payload amounts for debugging
+    console.log('💰 [SUBMIT COMPLETE] Received payload amounts:', {
+      govtFee: submitDto.govtFee,
+      serviceFee: submitDto.serviceFee,
+      processingFee: submitDto.processingFee,
+      totalAmount: submitDto.totalAmount,
+      discountAmount: submitDto.discountAmount,
+      couponCode: submitDto.couponCode,
+      paymentAmount: submitDto.payment?.amount,
+      paymentGateway: submitDto.payment?.paymentGateway,
+      transactionId: submitDto.payment?.transactionId,
+      paymentIntentId: submitDto.payment?.paymentIntentId,
+    });
+
     // We'll use a transaction to ensure all or nothing
     const queryRunner = this.applicationRepo.manager.connection.createQueryRunner();
     await queryRunner.connect();
@@ -1554,35 +2020,72 @@ export class VisaApplicationsService {
 
         if (customer) {
           customerId = customer.id;
-          // Update existing customer with traveler 1's details
-          customer.fullname = `${firstTraveler.firstName} ${firstTraveler.lastName}`;
-          customer.email = firstTraveler.email;
-          customer.residenceCountry = firstTraveler.residenceCountry;
-          customer.nationality = submitDto.nationality || firstTraveler.passportNationality;
-          customer.passportNumber = firstTraveler.passportNumber;
-          customer.passportNationality = firstTraveler.passportNationality;
-          customer.passportExpiryDate = new Date(firstTraveler.passportExpiryDate);
-          customer.dateOfBirth = new Date(firstTraveler.dateOfBirth);
-          customer.phoneNumber = submitDto.phoneNumber || firstTraveler.phone || customer.phoneNumber;
-          customer.hasSchengenVisa = firstTraveler.hasSchengenVisa;
+          // Only update customer fields if they are currently null/undefined
+          // This prevents overwriting existing data when creating new applications
+          // Each application should be independent
+          // ✅ Don't update customer.fullname from traveler data - customer account name is separate
+          // Only set if it's truly empty (new customer with no account name set)
+          // Customer account name should remain independent of traveler names
+          if (!customer.fullname || customer.fullname.trim() === '') {
+            // For new customers, we can set a default, but this should ideally come from account creation
+            // For now, use traveler name only if customer name is completely empty
+            customer.fullname = `${firstTraveler.firstName} ${firstTraveler.lastName}`;
+          }
+          // ❌ Removed: Don't update existing customer fullname - it's their account username
+          // Email should not change (it's the unique identifier)
+          if (!customer.residenceCountry) {
+            customer.residenceCountry = firstTraveler.residenceCountry || undefined;
+          }
+          if (!customer.nationality) {
+            customer.nationality = submitDto.nationality || firstTraveler.passportNationality || undefined;
+          }
+          if (!customer.passportNumber) {
+            customer.passportNumber = firstTraveler.passportNumber || undefined;
+          }
+          if (!customer.passportNationality) {
+            customer.passportNationality = firstTraveler.passportNationality || undefined;
+          }
+          if (!customer.passportExpiryDate) {
+            customer.passportExpiryDate = firstTraveler.passportExpiryDate
+              ? new Date(firstTraveler.passportExpiryDate)
+              : undefined;
+          }
+          if (!customer.dateOfBirth) {
+            customer.dateOfBirth = new Date(firstTraveler.dateOfBirth);
+          }
+          if (!customer.phoneNumber) {
+            customer.phoneNumber = submitDto.phoneNumber || firstTraveler.phone || undefined;
+          }
+          if (customer.hasSchengenVisa === null || customer.hasSchengenVisa === undefined) {
+            customer.hasSchengenVisa = firstTraveler.hasSchengenVisa !== undefined && firstTraveler.hasSchengenVisa !== null
+              ? firstTraveler.hasSchengenVisa
+              : false;
+          }
+          // receiveUpdates can be updated from any application
           customer.receiveUpdates = firstTraveler.receiveUpdates !== undefined ? firstTraveler.receiveUpdates : (customer.receiveUpdates ?? false);
           customer.status = customer.status || 'Active';
         } else {
           // Create new customer from traveler 1
-          customer = this.customerRepo.create({
-            fullname: `${firstTraveler.firstName} ${firstTraveler.lastName}`,
-            email: firstTraveler.email,
-            residenceCountry: firstTraveler.residenceCountry,
-            nationality: submitDto.nationality || firstTraveler.passportNationality,
-            passportNumber: firstTraveler.passportNumber,
-            passportNationality: firstTraveler.passportNationality,
-            passportExpiryDate: new Date(firstTraveler.passportExpiryDate),
-            dateOfBirth: new Date(firstTraveler.dateOfBirth),
-            phoneNumber: submitDto.phoneNumber || firstTraveler.phone || undefined,
-            hasSchengenVisa: firstTraveler.hasSchengenVisa,
-            receiveUpdates: firstTraveler.receiveUpdates !== undefined ? firstTraveler.receiveUpdates : false,
-            status: 'Active',
-          });
+          // ✅ Note: For new customers, we use traveler name as initial account name
+          // But in the future, account name should be set separately during account creation
+          const newCustomer = new Customer();
+          newCustomer.fullname = `${firstTraveler.firstName} ${firstTraveler.lastName}`; // Initial name for new customer
+          newCustomer.email = firstTraveler.email || '';
+          newCustomer.residenceCountry = firstTraveler.residenceCountry || undefined;
+          newCustomer.nationality = submitDto.nationality || firstTraveler.passportNationality;
+          newCustomer.passportNumber = firstTraveler.passportNumber || undefined;
+          newCustomer.passportNationality = firstTraveler.passportNationality;
+          newCustomer.passportExpiryDate = firstTraveler.passportExpiryDate
+            ? new Date(firstTraveler.passportExpiryDate)
+            : undefined;
+          newCustomer.dateOfBirth = new Date(firstTraveler.dateOfBirth);
+          newCustomer.phoneNumber = submitDto.phoneNumber || firstTraveler.phone || undefined;
+          newCustomer.hasSchengenVisa = firstTraveler.hasSchengenVisa !== undefined && firstTraveler.hasSchengenVisa !== null
+            ? firstTraveler.hasSchengenVisa
+            : false;
+          newCustomer.receiveUpdates = firstTraveler.receiveUpdates !== undefined ? firstTraveler.receiveUpdates : false;
+          newCustomer.status = 'Active';
+          customer = newCustomer;
           customerWasCreated = true;
         }
       } else {
@@ -1595,17 +2098,46 @@ export class VisaApplicationsService {
             `Customer with ID ${customerId} not found`,
           );
         }
-        // Update customer with traveler 1's details
-        customer.fullname = `${firstTraveler.firstName} ${firstTraveler.lastName}`;
-        customer.email = firstTraveler.email;
-        customer.residenceCountry = firstTraveler.residenceCountry;
-        customer.nationality = submitDto.nationality || firstTraveler.passportNationality;
-        customer.passportNumber = firstTraveler.passportNumber;
-        customer.passportNationality = firstTraveler.passportNationality;
-        customer.passportExpiryDate = new Date(firstTraveler.passportExpiryDate);
-        customer.dateOfBirth = new Date(firstTraveler.dateOfBirth);
-        customer.phoneNumber = submitDto.phoneNumber || firstTraveler.phone || customer.phoneNumber;
-        customer.hasSchengenVisa = firstTraveler.hasSchengenVisa;
+        // Only update customer fields if they are currently null/undefined
+        // This prevents overwriting existing data when creating new applications
+        // Each application should be independent
+        // ✅ Don't update customer.fullname from traveler data - customer account name is separate
+        // Only set if it's truly empty (new customer with no account name set)
+        if (!customer.fullname || customer.fullname.trim() === '') {
+          // For new customers, we can set a default, but this should ideally come from account creation
+          customer.fullname = `${firstTraveler.firstName} ${firstTraveler.lastName}`;
+        }
+        // ❌ Removed: Don't update existing customer fullname - it's their account username
+        // Email should not change (it's the unique identifier)
+        if (!customer.residenceCountry) {
+          customer.residenceCountry = firstTraveler.residenceCountry || undefined;
+        }
+        if (!customer.nationality) {
+          customer.nationality = submitDto.nationality || firstTraveler.passportNationality || undefined;
+        }
+        if (!customer.passportNumber) {
+          customer.passportNumber = firstTraveler.passportNumber || undefined;
+        }
+        if (!customer.passportNationality) {
+          customer.passportNationality = firstTraveler.passportNationality || undefined;
+        }
+        if (!customer.passportExpiryDate) {
+          customer.passportExpiryDate = firstTraveler.passportExpiryDate
+            ? new Date(firstTraveler.passportExpiryDate)
+            : undefined;
+        }
+        if (!customer.dateOfBirth) {
+          customer.dateOfBirth = new Date(firstTraveler.dateOfBirth);
+        }
+        if (!customer.phoneNumber) {
+          customer.phoneNumber = submitDto.phoneNumber || firstTraveler.phone || undefined;
+        }
+        if (customer.hasSchengenVisa === null || customer.hasSchengenVisa === undefined) {
+          customer.hasSchengenVisa = firstTraveler.hasSchengenVisa !== undefined && firstTraveler.hasSchengenVisa !== null
+            ? firstTraveler.hasSchengenVisa
+            : false;
+        }
+        // receiveUpdates can be updated from any application
         customer.receiveUpdates = firstTraveler.receiveUpdates !== undefined ? firstTraveler.receiveUpdates : (customer.receiveUpdates ?? false);
       }
 
@@ -1676,21 +2208,86 @@ export class VisaApplicationsService {
       // 6. Use fees from DTO (frontend calculated these, possibly with nationality-specific pricing)
       // The frontend sends govtFee and serviceFee which may already be multiplied by numberOfTravelers
       // and may include nationality-specific adjustments
-      const governmentFee = submitDto.govtFee;
-      const serviceFee = submitDto.serviceFee;
-      const baseTotalAmount = governmentFee + serviceFee + submitDto.processingFee;
+
+      // Helper function to safely convert to number
+      const toNumber = (value: any, fieldName: string, defaultValue: number = 0): number => {
+        if (value === null || value === undefined || value === '') {
+          return defaultValue;
+        }
+        const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+        if (isNaN(num)) {
+          throw new BadRequestException(
+            `Invalid ${fieldName}: "${value}". Must be a valid number.`,
+          );
+        }
+        return num;
+      };
+
+      // Log received amounts for debugging
+      console.log('💰 [AMOUNT EXTRACTION] Received amounts from payload:', {
+        govtFee: submitDto.govtFee,
+        serviceFee: submitDto.serviceFee,
+        processingFee: submitDto.processingFee,
+        totalAmount: submitDto.totalAmount,
+        discountAmount: submitDto.discountAmount,
+        couponCode: submitDto.couponCode,
+        paymentAmount: submitDto.payment?.amount,
+      });
+
+      // Convert and validate all amounts - ensure they are proper numbers
+      const governmentFee = toNumber(submitDto.govtFee, 'government fee');
+      const serviceFee = toNumber(submitDto.serviceFee, 'service fee');
+      const processingFee = toNumber(submitDto.processingFee, 'processing fee', 0);
+      const discountAmount = toNumber(submitDto.discountAmount, 'discount amount', 0);
+      const baseTotalAmount = governmentFee + serviceFee + processingFee;
+
+      // Validate required fee fields
+      if (governmentFee < 0) {
+        throw new BadRequestException(
+          `Invalid government fee: ${governmentFee}. Government fee must be >= 0.`,
+        );
+      }
+      if (serviceFee < 0) {
+        throw new BadRequestException(
+          `Invalid service fee: ${serviceFee}. Service fee must be >= 0.`,
+        );
+      }
 
       // 7. Use the totalAmount from payload (already includes discount if applied)
       // This is the amount the frontend calculated after applying coupon discount
-      const totalAmount = submitDto.totalAmount;
+      // If totalAmount is missing, calculate it as fallback
+      let totalAmount = toNumber(submitDto.totalAmount, 'total amount', baseTotalAmount - discountAmount);
+
+      // If totalAmount wasn't provided or was invalid, use calculated value
+      // (toNumber already handled the conversion, but check if original value was missing)
+      if (submitDto.totalAmount === null || submitDto.totalAmount === undefined) {
+        console.warn('⚠️ [AMOUNT EXTRACTION] totalAmount was missing, using calculated value');
+        totalAmount = baseTotalAmount - discountAmount;
+        console.log(`💰 [AMOUNT EXTRACTION] Calculated totalAmount: ${totalAmount} (base: ${baseTotalAmount}, discount: ${discountAmount})`);
+      }
 
       // Validate that the totalAmount is reasonable (not less than 0, not more than base)
       if (totalAmount < 0) {
-        throw new BadRequestException('Total amount cannot be negative');
+        throw new BadRequestException(`Total amount cannot be negative: ${totalAmount}`);
       }
-      if (totalAmount > baseTotalAmount) {
-        throw new BadRequestException('Total amount cannot exceed base amount');
+      if (totalAmount > baseTotalAmount * 1.1) {
+        // Allow 10% tolerance for rounding differences
+        throw new BadRequestException(
+          `Total amount (${totalAmount}) cannot exceed base amount (${baseTotalAmount}) by more than 10%`,
+        );
       }
+
+      console.log('💰 [AMOUNT EXTRACTION] Final amounts to be saved (as numbers):', {
+        governmentFee,
+        serviceFee,
+        processingFee,
+        totalAmount,
+        baseTotalAmount,
+        discountAmount,
+        typeof_governmentFee: typeof governmentFee,
+        typeof_serviceFee: typeof serviceFee,
+        typeof_totalAmount: typeof totalAmount,
+      });
 
       // 2. Create or update application (use customer's nationality from traveler 1)
       let savedApplication: VisaApplication;
@@ -1708,11 +2305,11 @@ export class VisaApplicationsService {
         draftApplication.phoneNumber = savedCustomer.phoneNumber;
         draftApplication.processingType = submitDto.processingType ?? null;
         draftApplication.processingTime = submitDto.processingTime ?? null;
-        draftApplication.processingFee = submitDto.processingFee;
+        draftApplication.processingFee = processingFee; // Use converted number
         draftApplication.processingFeeId = submitDto.processingFeeId ?? null;
-        draftApplication.governmentFee = governmentFee;
-        draftApplication.serviceFee = serviceFee;
-        draftApplication.totalAmount = totalAmount;
+        draftApplication.governmentFee = governmentFee; // Already converted to number
+        draftApplication.serviceFee = serviceFee; // Already converted to number
+        draftApplication.totalAmount = totalAmount; // Already converted to number
         draftApplication.status = 'Additional Info required';
         draftApplication.submittedAt = submissionDate;
         draftApplication.notes = submitDto.notes ?? null;
@@ -1740,11 +2337,11 @@ export class VisaApplicationsService {
           phoneNumber: savedCustomer.phoneNumber,
           processingType: submitDto.processingType ?? null,
           processingTime: submitDto.processingTime ?? null,
-          processingFee: submitDto.processingFee,
+          processingFee: processingFee, // Use converted number
           processingFeeId: submitDto.processingFeeId ?? null,
-          governmentFee,
-          serviceFee,
-          totalAmount, // Use discounted amount from payload
+          governmentFee: governmentFee, // Already converted to number
+          serviceFee: serviceFee, // Already converted to number
+          totalAmount: totalAmount, // Already converted to number, includes discount
           status: 'Additional Info required', // Default status when submitted
           submittedAt: submissionDate,
           notes: submitDto.notes ?? null,
@@ -1766,26 +2363,142 @@ export class VisaApplicationsService {
       // Skip the first traveler since they are the customer
       await queryRunner.manager.delete(Traveler, { applicationId: savedApplication.id });
       const additionalTravelers = submitDto.travelers.slice(1).map((travelerData) => {
-        return {
-          applicationId: savedApplication.id,
-          firstName: travelerData.firstName,
-          lastName: travelerData.lastName,
-          email: travelerData.email,
-          dateOfBirth: new Date(travelerData.dateOfBirth),
-          passportNationality: travelerData.passportNationality,
-          passportNumber: travelerData.passportNumber,
-          passportExpiryDate: new Date(travelerData.passportExpiryDate),
-          residenceCountry: travelerData.residenceCountry,
-          hasSchengenVisa: travelerData.hasSchengenVisa,
-          receiveUpdates: travelerData.receiveUpdates !== undefined ? travelerData.receiveUpdates : false,
-          placeOfBirth: travelerData.placeOfBirth,
-        };
+        const addPassportLater = travelerData.addPassportDetailsLater === true;
+
+        // Initialize fieldResponses to store missing passport fields
+        const fieldResponses: Record<string | number, any> = {};
+
+        // If passport details are to be added later, add missing fields to fieldResponses
+        if (addPassportLater) {
+          // Add passport fields as special entries in fieldResponses for additional info form
+          // Using special keys with underscore prefix to distinguish from regular visa product fields
+          if (!travelerData.passportNumber) {
+            fieldResponses['_passport_number'] = {
+              value: '',
+              submittedAt: null,
+            };
+          }
+          if (!travelerData.passportExpiryDate) {
+            fieldResponses['_passport_expiry_date'] = {
+              value: '',
+              submittedAt: null,
+            };
+          }
+          if (!travelerData.residenceCountry) {
+            fieldResponses['_residence_country'] = {
+              value: '',
+              submittedAt: null,
+            };
+          }
+          if (travelerData.hasSchengenVisa === undefined || travelerData.hasSchengenVisa === null) {
+            fieldResponses['_has_schengen_visa'] = {
+              value: '',
+              submittedAt: null,
+            };
+          }
+        }
+
+        const traveler = new Traveler();
+        traveler.applicationId = savedApplication.id;
+        traveler.firstName = travelerData.firstName;
+        traveler.lastName = travelerData.lastName;
+        traveler.email = (travelerData.email || undefined) as any;
+        traveler.dateOfBirth = new Date(travelerData.dateOfBirth);
+        traveler.passportNationality = (travelerData.passportNationality || undefined) as any; // Always required
+        traveler.passportNumber = (travelerData.passportNumber || undefined) as any;
+        traveler.passportExpiryDate = (travelerData.passportExpiryDate
+          ? new Date(travelerData.passportExpiryDate)
+          : undefined) as any;
+        traveler.residenceCountry = (travelerData.residenceCountry || undefined) as any;
+        traveler.hasSchengenVisa = travelerData.hasSchengenVisa !== undefined && travelerData.hasSchengenVisa !== null
+          ? travelerData.hasSchengenVisa
+          : false;
+        traveler.receiveUpdates = travelerData.receiveUpdates !== undefined ? travelerData.receiveUpdates : false;
+        traveler.placeOfBirth = (travelerData.placeOfBirth || undefined) as any;
+        traveler.fieldResponses = Object.keys(fieldResponses).length > 0 ? fieldResponses : undefined;
+        return traveler;
       });
 
       // Only save if there are additional travelers (travelers 2+)
-      const savedTravelers = additionalTravelers.length > 0
+      const savedTravelers: Traveler[] = additionalTravelers.length > 0
         ? await queryRunner.manager.save(Traveler, additionalTravelers)
         : [];
+
+      // Handle customer (first traveler) - create Traveler record if passport details are missing
+      const firstTravelerAddPassportLater = firstTraveler.addPassportDetailsLater === true;
+      let customerTravelerRecord: Traveler | null = null; // Store customer traveler record if it exists
+
+      if (firstTravelerAddPassportLater) {
+        // Check if customer traveler already exists
+        const existingCustomerTraveler = await queryRunner.manager.findOne(Traveler, {
+          where: { applicationId: savedApplication.id },
+          order: { createdAt: 'ASC' },
+        });
+
+        // Initialize fieldResponses for missing passport fields
+        const customerFieldResponses: Record<string | number, any> = {};
+
+        if (!firstTraveler.passportNumber) {
+          customerFieldResponses['_passport_number'] = {
+            value: '',
+            submittedAt: null,
+          };
+        }
+        if (!firstTraveler.passportExpiryDate) {
+          customerFieldResponses['_passport_expiry_date'] = {
+            value: '',
+            submittedAt: null,
+          };
+        }
+        if (!firstTraveler.residenceCountry) {
+          customerFieldResponses['_residence_country'] = {
+            value: '',
+            submittedAt: null,
+          };
+        }
+        if (firstTraveler.hasSchengenVisa === undefined || firstTraveler.hasSchengenVisa === null) {
+          customerFieldResponses['_has_schengen_visa'] = {
+            value: '',
+            submittedAt: null,
+          };
+        }
+
+        if (existingCustomerTraveler) {
+          // Update existing customer traveler with fieldResponses
+          existingCustomerTraveler.fieldResponses = {
+            ...(existingCustomerTraveler.fieldResponses || {}),
+            ...customerFieldResponses,
+          };
+          customerTravelerRecord = await queryRunner.manager.save(Traveler, existingCustomerTraveler);
+        } else {
+          // Create new Traveler record for customer
+          const customerTraveler = new Traveler();
+          customerTraveler.applicationId = savedApplication.id;
+          customerTraveler.firstName = firstTraveler.firstName;
+          customerTraveler.lastName = firstTraveler.lastName;
+          customerTraveler.email = (firstTraveler.email || undefined) as any;
+          customerTraveler.dateOfBirth = new Date(firstTraveler.dateOfBirth);
+          customerTraveler.passportNationality = (firstTraveler.passportNationality || undefined) as any;
+          customerTraveler.passportNumber = (firstTraveler.passportNumber || undefined) as any;
+          customerTraveler.passportExpiryDate = (firstTraveler.passportExpiryDate
+            ? new Date(firstTraveler.passportExpiryDate)
+            : undefined) as any;
+          customerTraveler.residenceCountry = (firstTraveler.residenceCountry || undefined) as any;
+          customerTraveler.hasSchengenVisa = firstTraveler.hasSchengenVisa !== undefined && firstTraveler.hasSchengenVisa !== null
+            ? firstTraveler.hasSchengenVisa
+            : false;
+          customerTraveler.receiveUpdates = firstTraveler.receiveUpdates !== undefined ? firstTraveler.receiveUpdates : false;
+          customerTraveler.placeOfBirth = (firstTraveler.placeOfBirth || undefined) as any;
+          customerTraveler.fieldResponses = Object.keys(customerFieldResponses).length > 0 ? customerFieldResponses : undefined;
+          customerTravelerRecord = await queryRunner.manager.save(Traveler, customerTraveler);
+        }
+      } else {
+        // Even if not adding passport later, check if a customer traveler record exists
+        customerTravelerRecord = await queryRunner.manager.findOne(Traveler, {
+          where: { applicationId: savedApplication.id },
+          order: { createdAt: 'ASC' },
+        });
+      }
 
       // 10. Handle card info - either use saved card or save new card
       let cardInfoId: number | undefined = undefined;
@@ -1849,10 +2562,24 @@ export class VisaApplicationsService {
         paymentMetadata.baseAmount = baseTotalAmount;
       }
 
+      // Use payment.amount from payload if provided, otherwise use totalAmount
+      // Ensure payment amount is a valid number
+      let paymentAmount = totalAmount; // Default to totalAmount
+      if (submitDto.payment?.amount !== null && submitDto.payment?.amount !== undefined) {
+        paymentAmount = toNumber(submitDto.payment.amount, 'payment amount', totalAmount);
+      }
+
+      console.log('💰 [PAYMENT AMOUNT] Payment amount to be saved:', {
+        fromPaymentDto: submitDto.payment?.amount,
+        fromTotalAmount: totalAmount,
+        finalPaymentAmount: paymentAmount,
+        typeof_paymentAmount: typeof paymentAmount,
+      });
+
       const payment = {
         applicationId: savedApplication.id,
         customerId: savedApplication.customerId, // Link to customer
-        amount: totalAmount, // Use discounted amount from payload
+        amount: paymentAmount, // Use payment.amount if provided, otherwise totalAmount
         currency: 'USD',
         paymentMethod: 'card',
         paymentGateway: submitDto.payment.paymentGateway || 'stripe',
@@ -1869,6 +2596,16 @@ export class VisaApplicationsService {
 
       const savedPayment = await queryRunner.manager.save(Payment, payment) as Payment;
 
+      // Verify amounts were saved correctly
+      console.log('💰 [AMOUNT VERIFICATION] Verifying saved amounts:', {
+        applicationId: savedApplication.id,
+        applicationTotalAmount: savedApplication.totalAmount,
+        applicationGovernmentFee: savedApplication.governmentFee,
+        applicationServiceFee: savedApplication.serviceFee,
+        applicationProcessingFee: savedApplication.processingFee,
+        paymentAmount: savedPayment.amount,
+      });
+
       // 12. Increment coupon usage if a coupon was applied
       if (submitDto.couponCode) {
         try {
@@ -1882,6 +2619,24 @@ export class VisaApplicationsService {
 
       // 13. Commit transaction
       await queryRunner.commitTransaction();
+
+      // Re-fetch application after commit to ensure amounts are persisted
+      const finalApplication = await this.applicationRepo.findOne({
+        where: { id: savedApplication.id },
+      });
+
+      if (finalApplication) {
+        console.log('💰 [FINAL VERIFICATION] Application amounts after commit:', {
+          applicationId: finalApplication.id,
+          totalAmount: finalApplication.totalAmount,
+          governmentFee: finalApplication.governmentFee,
+          serviceFee: finalApplication.serviceFee,
+          processingFee: finalApplication.processingFee,
+        });
+
+        // Update savedApplication with the re-fetched data to ensure we return the persisted values
+        savedApplication = finalApplication;
+      }
 
       const frontendUrl = this.getFrontendUrl();
       const trackingUrl = `${frontendUrl}/track/${savedApplication.applicationNumber}`;
@@ -1923,18 +2678,26 @@ export class VisaApplicationsService {
       console.log('🔍 DEBUG: firstTraveler.receiveUpdates:', firstTraveler.receiveUpdates);
       console.log('🔍 DEBUG: Final receiveUpdatesValue for response:', receiveUpdatesValue);
 
+      // ✅ Use traveler data for name - customer account name is separate from traveler name
+      // If Traveler record exists, use that (it has the correct traveler name from the application)
+      // Otherwise, use firstTraveler data (from the submitted payload)
+      const customerTravelerFirstName = customerTravelerRecord?.firstName || firstTraveler.firstName;
+      const customerTravelerLastName = customerTravelerRecord?.lastName || firstTraveler.lastName;
+
       const customerTraveler = {
-        firstName: savedCustomer.fullname.split(' ')[0] || firstTraveler.firstName,
-        lastName: savedCustomer.fullname.split(' ').slice(1).join(' ') || firstTraveler.lastName,
+        id: customerTravelerRecord?.id || null, // Include traveler ID if Traveler record exists
+        firstName: customerTravelerFirstName, // ✅ Use traveler's name, NOT customer account name
+        lastName: customerTravelerLastName, // ✅ Use traveler's name, NOT customer account name
         email: savedCustomer.email,
-        dateOfBirth: savedCustomer.dateOfBirth || firstTraveler.dateOfBirth,
-        passportNationality: savedCustomer.passportNationality,
-        passportNumber: savedCustomer.passportNumber,
-        passportExpiryDate: savedCustomer.passportExpiryDate,
-        residenceCountry: savedCustomer.residenceCountry,
-        hasSchengenVisa: savedCustomer.hasSchengenVisa ?? firstTraveler.hasSchengenVisa, // Use customer's value if available, otherwise from original
+        dateOfBirth: customerTravelerRecord?.dateOfBirth || savedCustomer.dateOfBirth || new Date(firstTraveler.dateOfBirth),
+        passportNationality: customerTravelerRecord?.passportNationality || savedCustomer.passportNationality,
+        passportNumber: customerTravelerRecord?.passportNumber || savedCustomer.passportNumber,
+        passportExpiryDate: customerTravelerRecord?.passportExpiryDate || savedCustomer.passportExpiryDate,
+        residenceCountry: customerTravelerRecord?.residenceCountry || savedCustomer.residenceCountry,
+        hasSchengenVisa: customerTravelerRecord?.hasSchengenVisa ?? savedCustomer.hasSchengenVisa ?? firstTraveler.hasSchengenVisa,
         receiveUpdates: receiveUpdatesValue, // Always explicitly set as boolean
-        placeOfBirth: firstTraveler.placeOfBirth, // Keep from original
+        placeOfBirth: customerTravelerRecord?.placeOfBirth || firstTraveler.placeOfBirth,
+        fieldResponses: customerTravelerRecord?.fieldResponses || {}, // Include fieldResponses if Traveler record exists
       };
 
       return {
@@ -1964,20 +2727,31 @@ export class VisaApplicationsService {
             id: savedApplication.id,
             applicationNumber: savedApplication.applicationNumber,
             status: savedApplication.status,
+            governmentFee: parseFloat(savedApplication.governmentFee.toString()),
+            serviceFee: parseFloat(savedApplication.serviceFee.toString()),
+            processingFee: parseFloat(savedApplication.processingFee.toString()),
             totalAmount: parseFloat(savedApplication.totalAmount.toString()),
+            discountAmount: submitDto.discountAmount || undefined,
+            couponCode: submitDto.couponCode || undefined,
             submittedAt: savedApplication.submittedAt,
           },
-          // Traveler 1 (customer) + additional travelers
+          // Traveler 1 (customer) + additional travelers - ALL with IDs
           travelers: [
-            customerTraveler, // Traveler 1 (the customer)
+            customerTraveler, // Traveler 1 (the customer) - now includes id if Traveler record exists
             ...savedTravelers.map((t) => ({
+              id: t.id, // ✅ Include traveler ID
               firstName: t.firstName,
               lastName: t.lastName,
               email: t.email,
-              passportNumber: t.passportNumber,
+              dateOfBirth: t.dateOfBirth,
               passportNationality: t.passportNationality,
+              passportNumber: t.passportNumber,
               passportExpiryDate: t.passportExpiryDate,
+              residenceCountry: t.residenceCountry,
+              hasSchengenVisa: t.hasSchengenVisa,
               receiveUpdates: t.receiveUpdates ?? false,
+              placeOfBirth: t.placeOfBirth,
+              fieldResponses: t.fieldResponses || {}, // Include fieldResponses
             })),
           ],
           payment: {
@@ -2027,7 +2801,7 @@ export class VisaApplicationsService {
     applicationId: number,
     requests: Array<{
       target: 'application' | 'traveler';
-      travelerId?: number;
+      travelerId?: number | string | null; // Can be number, string (for temp-traveler-0), or null
       fieldIds?: number[]; // Existing field IDs from visa product
       newFields?: Array<{ // New custom fields to create for this user only
         fieldType: string;
@@ -2055,17 +2829,102 @@ export class VisaApplicationsService {
         );
       }
 
-      // Validate travelers exist
+      // ✅ Handle temp-traveler-0 (traveler 1) mapping BEFORE validation
+      // Map "temp-traveler-0" to actual traveler 1 ID, or null if traveler 1 has no Traveler record
+      const travelersInDB = application.travelers?.length || 0;
+      const isTraveler1Missing = application.numberOfTravelers > travelersInDB;
+
       for (const request of requests) {
         if (request.target === 'traveler' && request.travelerId) {
+          // Check if it's a temp traveler ID (string starting with "temp-traveler-")
+          if (typeof request.travelerId === 'string' && request.travelerId.startsWith('temp-traveler-')) {
+            const originalTravelerId = request.travelerId;
+            console.log(`🔍 [RESUBMISSION] Received temp-traveler ID: ${originalTravelerId}. numberOfTravelers=${application.numberOfTravelers}, travelersInDB=${travelersInDB}, isTraveler1Missing=${isTraveler1Missing}`);
+
+            if (isTraveler1Missing) {
+              // Traveler 1 doesn't have a Traveler record - use null for application-level
+              request.travelerId = null as any;
+              console.log(`✅ [RESUBMISSION] Traveler 1 is missing from DB. Mapped ${originalTravelerId} to null (application-level).`);
+            } else if (application.travelers && application.travelers.length > 0) {
+              // Traveler 1 exists in DB - find the earliest traveler (traveler 1)
+              const sortedTravelers = [...application.travelers].sort((a, b) => {
+                const aDate = a.createdAt || new Date(0);
+                const bDate = b.createdAt || new Date(0);
+                return aDate.getTime() - bDate.getTime();
+              });
+
+              const earliestTraveler = sortedTravelers[0];
+              if (earliestTraveler) {
+                request.travelerId = earliestTraveler.id as any; // Map to actual numeric ID
+                console.log(`✅ [RESUBMISSION] Mapped ${originalTravelerId} to actual traveler 1 ID: ${earliestTraveler.id}`);
+              } else {
+                // Should not happen, but fallback
+                request.travelerId = null as any;
+                console.log(`⚠️ [RESUBMISSION] No earliest traveler found. Mapped ${originalTravelerId} to null.`);
+              }
+            } else {
+              // No travelers in DB at all - traveler 1 doesn't have a Traveler record
+              request.travelerId = null as any;
+              console.log(`⚠️ [RESUBMISSION] No travelers in DB. Traveler 1 has no Traveler record. Mapped ${originalTravelerId} to null.`);
+            }
+          } else {
+            // Try to parse as number if it's a string
+            if (typeof request.travelerId === 'string') {
+              const parsedId = parseInt(request.travelerId, 10);
+              if (!isNaN(parsedId)) {
+                request.travelerId = parsedId as any;
+              } else {
+                throw new BadRequestException(
+                  `Invalid travelerId format: ${request.travelerId}. Must be a number or 'temp-traveler-0'`
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // ✅ Normalize travelerId types after mapping (ensure they're number | null | undefined)
+      for (const request of requests) {
+        if (request.target === 'traveler' && request.travelerId) {
+          // Convert to number if it's still a string (shouldn't happen after mapping, but just in case)
+          if (typeof request.travelerId === 'string') {
+            if (request.travelerId.startsWith('temp-traveler-')) {
+              // This shouldn't happen - temp IDs should have been mapped already
+              console.warn(`⚠️ [RESUBMISSION] Found unmapped temp-traveler ID: ${request.travelerId}`);
+              request.travelerId = null as any;
+            } else {
+              const parsed = parseInt(request.travelerId, 10);
+              request.travelerId = isNaN(parsed) ? null : (parsed as any);
+            }
+          }
+        }
+      }
+
+      // Validate travelers exist (after mapping temp IDs)
+      // Note: travelerId can be null/undefined for traveler 1 who doesn't have a Traveler record
+      for (const request of requests) {
+        if (request.target === 'traveler' && request.travelerId !== null && request.travelerId !== undefined) {
+          // Ensure travelerId is a number for validation
+          const travelerIdNum = typeof request.travelerId === 'number' ? request.travelerId : parseInt(String(request.travelerId), 10);
+          if (isNaN(travelerIdNum)) {
+            throw new BadRequestException(`Invalid travelerId: ${request.travelerId}`);
+          }
+
           const traveler = application.travelers?.find(
-            (t) => t.id === request.travelerId
+            (t) => t.id === travelerIdNum
           );
           if (!traveler) {
             throw new NotFoundException(
-              `Traveler with ID ${request.travelerId} not found for this application`
+              `Traveler with ID ${travelerIdNum} not found for this application`
             );
           }
+
+          // Normalize the type to number
+          request.travelerId = travelerIdNum as any;
+        } else if (request.target === 'traveler' && (request.travelerId === null || request.travelerId === undefined)) {
+          // Traveler 1 without a Traveler record - this is valid
+          console.log(`✅ [RESUBMISSION] Traveler 1 (customer) has no Traveler record - using null travelerId (application-level)`);
+          request.travelerId = null as any; // Ensure it's null, not undefined
         }
       }
 
@@ -2108,20 +2967,48 @@ export class VisaApplicationsService {
               isActive: true,
               createdAt: new Date(),
               updatedAt: new Date(),
-              travelerId: req.target === 'traveler' ? req.travelerId : undefined,
+              travelerId: req.target === 'traveler' && req.travelerId !== null && req.travelerId !== undefined
+                ? (typeof req.travelerId === 'number' ? req.travelerId : parseInt(String(req.travelerId), 10))
+                : undefined, // undefined for application-level or when travelerId is null
               source: 'admin',
             };
             application.adminRequestedFields.push(adminField);
             fieldIds.push(adminField.id); // Add the negative ID to the fieldIds array
+
+            console.log(`✅ [RESUBMISSION] Created admin field:`, {
+              id: adminField.id,
+              question: adminField.question,
+              fieldType: adminField.fieldType,
+              travelerId: adminField.travelerId,
+            });
           }
+
+          console.log(`✅ [RESUBMISSION] Total admin fields in application:`, application.adminRequestedFields.length);
+          console.log(`✅ [RESUBMISSION] Admin fields details:`, application.adminRequestedFields.map((f: any) => ({
+            id: f.id,
+            question: f.question,
+            fieldType: f.fieldType,
+            travelerId: f.travelerId,
+          })));
         }
 
         // Generate unique ID for this request
         const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // Normalize travelerId to number | null
+        let normalizedTravelerId: number | null = null;
+        if (req.travelerId !== null && req.travelerId !== undefined) {
+          if (typeof req.travelerId === 'number') {
+            normalizedTravelerId = req.travelerId;
+          } else if (typeof req.travelerId === 'string') {
+            const parsed = parseInt(req.travelerId, 10);
+            normalizedTravelerId = isNaN(parsed) ? null : parsed;
+          }
+        }
+
         const resubmissionRequest: ResubmissionRequest = {
           id: requestId,
           target: req.target,
-          travelerId: req.travelerId || null,
+          travelerId: normalizedTravelerId,
           fieldIds: fieldIds, // Includes both existing field IDs and newly created negative IDs
           note: req.note || null,
           requestedAt: new Date().toISOString(),
@@ -2139,7 +3026,17 @@ export class VisaApplicationsService {
       // ✅ BACKWARD COMPATIBILITY: Also set old fields for Option A (single request)
       if (processedRequests.length === 1) {
         application.resubmissionTarget = requests[0].target;
-        application.resubmissionTravelerId = requests[0].travelerId || null;
+        // Normalize travelerId for backward compatibility
+        let normalizedTravelerId: number | null = null;
+        if (requests[0].travelerId !== null && requests[0].travelerId !== undefined) {
+          if (typeof requests[0].travelerId === 'number') {
+            normalizedTravelerId = requests[0].travelerId;
+          } else if (typeof requests[0].travelerId === 'string') {
+            const parsed = parseInt(requests[0].travelerId, 10);
+            normalizedTravelerId = isNaN(parsed) ? null : parsed;
+          }
+        }
+        application.resubmissionTravelerId = normalizedTravelerId;
         application.requestedFieldIds = processedRequests[0].fieldIds;
       } else {
         // Multiple requests - clear old fields
@@ -2148,7 +3045,24 @@ export class VisaApplicationsService {
         application.requestedFieldIds = null;
       }
 
-      await this.applicationRepo.save(application);
+      // ✅ Ensure TypeORM detects the change by creating a new array reference
+      // This is important for JSON columns in TypeORM
+      if (application.adminRequestedFields) {
+        application.adminRequestedFields = [...application.adminRequestedFields];
+      }
+
+      console.log(`💾 [RESUBMISSION] Saving application ${application.id} with ${application.adminRequestedFields?.length || 0} admin fields`);
+
+      const savedApplication = await this.applicationRepo.save(application);
+
+      // Verify the save worked
+      console.log(`✅ [RESUBMISSION] Application saved. Admin fields count: ${savedApplication.adminRequestedFields?.length || 0}`);
+      if (savedApplication.adminRequestedFields && savedApplication.adminRequestedFields.length > 0) {
+        console.log(`✅ [RESUBMISSION] Saved admin fields:`, savedApplication.adminRequestedFields.map((f: any) => ({
+          id: f.id,
+          question: f.question,
+        })));
+      }
 
       // Send resubmission email notification to customer
       // Load customer information for email
@@ -2219,6 +3133,68 @@ export class VisaApplicationsService {
     return {
       status: true,
       data: activeRequests,
+    };
+  }
+
+  /**
+   * Get all resubmission requests for an application (including fulfilled ones)
+   * Enriched with field definitions from adminRequestedFields
+   */
+  async getAllResubmissionRequests(applicationId: number) {
+    const application = await this.applicationRepo.findOne({
+      where: { id: applicationId },
+    });
+
+    if (!application) {
+      throw new NotFoundException(
+        `Application with ID ${applicationId} not found`
+      );
+    }
+
+    const allRequests = application.resubmissionRequests || [];
+
+    // Get admin fields map for quick lookup
+    const adminFieldsMap = new Map();
+    if (application.adminRequestedFields && Array.isArray(application.adminRequestedFields)) {
+      application.adminRequestedFields.forEach((field: any) => {
+        adminFieldsMap.set(field.id, field);
+      });
+    }
+
+    // Enrich requests with field definitions
+    const enrichedRequests = allRequests.map((req) => {
+      const newFields = req.fieldIds
+        .filter((fieldId: number) => fieldId < 0) // Only negative IDs are admin fields
+        .map((fieldId: number) => {
+          const fieldDef = adminFieldsMap.get(fieldId);
+          if (fieldDef) {
+            return {
+              id: fieldDef.id,
+              question: fieldDef.question,
+              fieldType: fieldDef.fieldType,
+              placeholder: fieldDef.placeholder,
+              isRequired: fieldDef.isRequired,
+              options: fieldDef.options,
+              allowedFileTypes: fieldDef.allowedFileTypes,
+              maxFileSizeMB: fieldDef.maxFileSizeMB,
+              minLength: fieldDef.minLength,
+              maxLength: fieldDef.maxLength,
+            };
+          }
+          return null;
+        })
+        .filter(f => f !== null); // Remove null entries
+
+      return {
+        ...req,
+        newFields: newFields.length > 0 ? newFields : undefined, // Only include if there are new fields
+      };
+    });
+
+    return {
+      status: true,
+      message: 'Resubmission requests retrieved successfully',
+      data: enrichedRequests,
     };
   }
 

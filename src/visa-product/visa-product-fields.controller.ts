@@ -20,6 +20,8 @@ import { CreateVisaProductFieldDto } from './dto/create-visa-product-field.dto';
 import { UpdateVisaProductFieldDto } from './dto/update-visa-product-field.dto';
 import { SubmitFieldResponseDto } from './dto/submit-field-response.dto';
 import { CloudinaryService } from '../common/cloudinary.service';
+import { BatchGetFieldsDto } from './dto/batch-get-fields.dto';
+import { BatchSaveFieldsDto } from './dto/batch-save-fields.dto';
 
 @Controller('visa-product-fields')
 export class VisaProductFieldsController {
@@ -33,6 +35,8 @@ export class VisaProductFieldsController {
    */
   @Post()
   create(@Body() createDto: CreateVisaProductFieldDto) {
+    // Debug log to verify displayOrder is received correctly
+    console.log('📥 Creating field with displayOrder:', createDto.displayOrder, 'question:', createDto.question);
     return this.visaProductFieldsService.create(createDto);
   }
 
@@ -158,7 +162,31 @@ export class VisaProductFieldsController {
    * Submit field responses for an application (User)
    */
   @Post('responses')
-  submitResponses(@Body() submitDto: SubmitFieldResponseDto) {
+  submitResponses(@Body() rawBody: any) {
+    // Log raw body first to see what we actually receive
+    console.log(`📥 [CONTROLLER RAW] Received raw body:`, JSON.stringify({
+      applicationId: rawBody.applicationId,
+      travelerId: rawBody.travelerId,
+      responsesCount: rawBody.responses?.length,
+      firstResponse: rawBody.responses?.[0],
+    }, null, 2));
+
+    // Manually construct the DTO to preserve passport field string IDs
+    const submitDto: SubmitFieldResponseDto = {
+      applicationId: Number(rawBody.applicationId),
+      travelerId: rawBody.travelerId ? Number(rawBody.travelerId) : undefined,
+      responses: (rawBody.responses || []).map((r: any) => ({
+        fieldId: r.fieldId, // Preserve as-is (string or number)
+        value: r.value,
+        filePath: r.filePath,
+        fileName: r.fileName,
+        fileSize: r.fileSize,
+      })),
+    };
+
+    console.log(`📥 [CONTROLLER] Constructed submitDto with ${submitDto.responses?.length || 0} responses`);
+    console.log(`📥 [CONTROLLER] First few responses:`, JSON.stringify(submitDto.responses?.slice(0, 5).map(r => ({ fieldId: r.fieldId, value: r.value, fieldIdType: typeof r.fieldId })), null, 2));
+
     return this.visaProductFieldsService.submitResponses(submitDto);
   }
 
@@ -189,11 +217,53 @@ export class VisaProductFieldsController {
   getFieldsWithResponses(
     @Param('applicationId') applicationId: number,
     @Query('travelerId') travelerId?: string,
+    @Query('viewMode') viewMode?: string, // 'admin' to show all fields, 'user' to restrict to requested fields
   ) {
     const travelerIdNum = travelerId ? parseInt(travelerId, 10) : undefined;
+    const isAdminView = viewMode === 'admin';
     return this.visaProductFieldsService.getFieldsWithResponses(
       applicationId,
       travelerIdNum,
+      isAdminView,
     );
+  }
+
+  /**
+   * Batch fetch fields for multiple visa products
+   * Returns fields grouped by visaProductId
+   */
+  @Post('batch-by-visa-products')
+  batchGetFieldsByVisaProducts(@Body() batchDto: BatchGetFieldsDto) {
+    return this.visaProductFieldsService.batchGetFieldsByVisaProducts(batchDto);
+  }
+
+  /**
+   * Batch create/update fields for a visa product
+   * If field has id, update it; if not, create new field
+   */
+  @Post('batch')
+  batchSaveFields(@Body() body: any) {
+    // Log raw body first to see what's actually being sent
+    console.log('📥 Raw batch save body received:', JSON.stringify(body, null, 2));
+
+    // Try to parse and validate
+    const batchDto: BatchSaveFieldsDto = {
+      visaProductId: body.visaProductId,
+      fields: body.fields || [],
+    };
+
+    console.log('📥 Parsed batch save:', {
+      visaProductId: batchDto.visaProductId,
+      fieldsCount: batchDto.fields?.length,
+      firstField: batchDto.fields?.[0],
+      allFields: batchDto.fields?.map((f: any) => ({
+        id: f?.id,
+        question: f?.question,
+        displayOrder: f?.displayOrder,
+        fieldType: f?.fieldType,
+      })),
+    });
+
+    return this.visaProductFieldsService.batchSaveFields(batchDto);
   }
 }

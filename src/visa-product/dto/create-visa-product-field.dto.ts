@@ -9,10 +9,12 @@ import {
   Min,
   Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { FieldType } from '../entities/visa-product-field.entity';
 
 export class CreateVisaProductFieldDto {
   @IsNumber()
+  @Type(() => Number)
   @IsNotEmpty({ message: 'Visa Product ID is required' })
   visaProductId: number;
 
@@ -33,6 +35,7 @@ export class CreateVisaProductFieldDto {
   isRequired?: boolean;
 
   @IsNumber()
+  @Type(() => Number)
   @Min(0)
   @IsOptional()
   displayOrder?: number;

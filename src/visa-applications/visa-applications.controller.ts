@@ -231,12 +231,13 @@ export class VisaApplicationsController {
   }
   /**
    * GET /visa-applications/:id/resubmission-requests
-   * Get active resubmission requests for an application
+   * Get all resubmission requests for an application (including fulfilled ones)
+   * Returns requests enriched with newFields containing question text
    */
   @Get(':id/resubmission-requests')
   async getResubmissionRequests(@Param('id', ParseIntPipe) id: number) {
     try {
-      return await this.visaApplicationsService.getActiveResubmissionRequests(id);
+      return await this.visaApplicationsService.getAllResubmissionRequests(id);
     } catch (error) {
       throw new BadRequestException({
         status: false,

@@ -32,26 +32,27 @@ class CompleteTravelerDto {
   @IsNotEmpty()
   dateOfBirth: string;
 
-  // Passport details
+  // Passport details - passportNationality is always required (for nationality)
   @IsString()
   @IsNotEmpty()
   passportNationality: string;
 
+  // Passport fields are optional if addPassportDetailsLater is true
   @IsString()
-  @IsNotEmpty()
-  passportNumber: string;
+  @IsOptional()
+  passportNumber?: string;
 
   @IsDateString()
-  @IsNotEmpty()
-  passportExpiryDate: string;
+  @IsOptional()
+  passportExpiryDate?: string;
 
   @IsString()
-  @IsNotEmpty()
-  residenceCountry: string;
+  @IsOptional()
+  residenceCountry?: string;
 
   @IsBoolean()
-  @IsNotEmpty()
-  hasSchengenVisa: boolean;
+  @IsOptional()
+  hasSchengenVisa?: boolean;
 
   @IsString()
   @IsOptional()
@@ -73,10 +74,28 @@ class CompleteTravelerDto {
     return Boolean(value);
   })
   receiveUpdates?: boolean;
+
+  // Flag to indicate if passport details should be added later
+  @IsBoolean()
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) return false;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return Boolean(value);
+  })
+  addPassportDetailsLater?: boolean;
 }
 
 // Payment data
 class CompletePaymentDto {
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  amount?: number; // Payment amount (should match totalAmount)
+
   @IsNumber()
   @IsOptional()
   cardInfoId?: number; // ID of saved card if using a saved card
@@ -179,7 +198,12 @@ export class SubmitCompleteApplicationDto {
   @IsOptional()
   processingTime?: string; // e.g., "5 days", "24 hours"
 
-  @IsNumber()
+  @Transform(({ value }) => {
+    if (value === null || value === undefined || value === '') return 0;
+    const num = Number(value);
+    return isNaN(num) ? 0 : num;
+  })
+  @IsNumber({}, { message: 'Processing fee must be a valid number' })
   @Min(0)
   processingFee: number;
 
@@ -188,15 +212,30 @@ export class SubmitCompleteApplicationDto {
   processingFeeId?: number; // ID from processing_fees table
 
   // Fees
-  @IsNumber()
+  @Transform(({ value }) => {
+    if (value === null || value === undefined || value === '') return undefined;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
+  @IsNumber({}, { message: 'Government fee must be a valid number' })
   @Min(0)
   govtFee: number;
 
-  @IsNumber()
+  @Transform(({ value }) => {
+    if (value === null || value === undefined || value === '') return undefined;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
+  @IsNumber({}, { message: 'Service fee must be a valid number' })
   @Min(0)
   serviceFee: number;
 
-  @IsNumber()
+  @Transform(({ value }) => {
+    if (value === null || value === undefined || value === '') return undefined;
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  })
+  @IsNumber({}, { message: 'Total amount must be a valid number' })
   @Min(0)
   totalAmount: number;
 

@@ -60,6 +60,11 @@ export class DraftTravelerDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  // Flag to indicate if passport details should be added later
+  @IsBoolean()
+  @IsOptional()
+  addPassportDetailsLater?: boolean;
 }
 
 export class CreateVisaApplicationDto {

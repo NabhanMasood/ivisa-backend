@@ -53,23 +53,57 @@ export class TravelersService {
         );
       }
 
+      // Initialize fieldResponses if passport details are to be added later
+      const fieldResponses: Record<string | number, any> = {};
+      const addPassportLater = createDto.addPassportDetailsLater === true;
+      
+      if (addPassportLater) {
+        // Add missing passport fields to fieldResponses for additional info form
+        if (!createDto.passportNumber) {
+          fieldResponses['_passport_number'] = {
+            value: '',
+            submittedAt: null,
+          };
+        }
+        if (!createDto.passportExpiryDate) {
+          fieldResponses['_passport_expiry_date'] = {
+            value: '',
+            submittedAt: null,
+          };
+        }
+        if (!createDto.residenceCountry) {
+          fieldResponses['_residence_country'] = {
+            value: '',
+            submittedAt: null,
+          };
+        }
+        if (createDto.hasSchengenVisa === undefined || createDto.hasSchengenVisa === null) {
+          fieldResponses['_has_schengen_visa'] = {
+            value: '',
+            submittedAt: null,
+          };
+        }
+      }
+
       // Create traveler with proper type conversion
-      const traveler = this.travelerRepo.create({
-        applicationId: createDto.applicationId,
-        firstName: createDto.firstName,
-        lastName: createDto.lastName,
-        email: createDto.email,
-        dateOfBirth: new Date(createDto.dateOfBirth),
-        passportNationality: createDto.passportNationality,
-        passportNumber: createDto.passportNumber,
-        passportExpiryDate: createDto.passportExpiryDate
-          ? new Date(createDto.passportExpiryDate)
-          : undefined,
-        residenceCountry: createDto.residenceCountry,
-        hasSchengenVisa: createDto.hasSchengenVisa || false,
-        placeOfBirth: createDto.placeOfBirth,
-        notes: createDto.notes,
-      });
+      const traveler = new Traveler();
+      traveler.applicationId = createDto.applicationId;
+      traveler.firstName = createDto.firstName;
+      traveler.lastName = createDto.lastName;
+      traveler.email = (createDto.email || undefined) as any;
+      traveler.dateOfBirth = new Date(createDto.dateOfBirth);
+      traveler.passportNationality = (createDto.passportNationality || undefined) as any;
+      traveler.passportNumber = (createDto.passportNumber || undefined) as any;
+      traveler.passportExpiryDate = (createDto.passportExpiryDate
+        ? new Date(createDto.passportExpiryDate)
+        : undefined) as any;
+      traveler.residenceCountry = (createDto.residenceCountry || undefined) as any;
+      traveler.hasSchengenVisa = createDto.hasSchengenVisa !== undefined && createDto.hasSchengenVisa !== null
+        ? createDto.hasSchengenVisa
+        : false;
+      traveler.placeOfBirth = (createDto.placeOfBirth || undefined) as any;
+      traveler.notes = (createDto.notes || undefined) as any;
+      traveler.fieldResponses = Object.keys(fieldResponses).length > 0 ? fieldResponses : undefined;
 
       const result = await this.travelerRepo.save(traveler);
 
@@ -129,22 +163,57 @@ export class TravelersService {
         );
       }
       const travelers = bulkDto.travelers.map((travelerData) => {
-        return this.travelerRepo.create({
-          applicationId: bulkDto.applicationId,
-          firstName: travelerData.firstName,
-          lastName: travelerData.lastName,
-          email: travelerData.email || undefined, // Change null to undefined
-          dateOfBirth: new Date(travelerData.dateOfBirth),
-          passportNationality: travelerData.passportNationality,
-          passportNumber: travelerData.passportNumber,
-          passportExpiryDate: travelerData.passportExpiryDate
-            ? new Date(travelerData.passportExpiryDate)
-            : undefined,
-          residenceCountry: travelerData.residenceCountry,
-          hasSchengenVisa: travelerData.hasSchengenVisa || false,
-          placeOfBirth: travelerData.placeOfBirth,
-          notes: travelerData.notes,
-        });
+        // Initialize fieldResponses if passport details are to be added later
+        const fieldResponses: Record<string | number, any> = {};
+        const addPassportLater = (travelerData as any).addPassportDetailsLater === true;
+        
+        if (addPassportLater) {
+          // Add missing passport fields to fieldResponses for additional info form
+          if (!travelerData.passportNumber) {
+            fieldResponses['_passport_number'] = {
+              value: '',
+              submittedAt: null,
+            };
+          }
+          if (!travelerData.passportExpiryDate) {
+            fieldResponses['_passport_expiry_date'] = {
+              value: '',
+              submittedAt: null,
+            };
+          }
+          if (!travelerData.residenceCountry) {
+            fieldResponses['_residence_country'] = {
+              value: '',
+              submittedAt: null,
+            };
+          }
+          if (travelerData.hasSchengenVisa === undefined || travelerData.hasSchengenVisa === null) {
+            fieldResponses['_has_schengen_visa'] = {
+              value: '',
+              submittedAt: null,
+            };
+          }
+        }
+
+        const traveler = new Traveler();
+        traveler.applicationId = bulkDto.applicationId;
+        traveler.firstName = travelerData.firstName;
+        traveler.lastName = travelerData.lastName;
+        traveler.email = (travelerData.email || undefined) as any;
+        traveler.dateOfBirth = new Date(travelerData.dateOfBirth);
+        traveler.passportNationality = (travelerData.passportNationality || undefined) as any;
+        traveler.passportNumber = (travelerData.passportNumber || undefined) as any;
+        traveler.passportExpiryDate = (travelerData.passportExpiryDate
+          ? new Date(travelerData.passportExpiryDate)
+          : undefined) as any;
+        traveler.residenceCountry = (travelerData.residenceCountry || undefined) as any;
+        traveler.hasSchengenVisa = travelerData.hasSchengenVisa !== undefined && travelerData.hasSchengenVisa !== null
+          ? travelerData.hasSchengenVisa
+          : false;
+        traveler.placeOfBirth = (travelerData.placeOfBirth || undefined) as any;
+        traveler.notes = (travelerData.notes || undefined) as any;
+        traveler.fieldResponses = Object.keys(fieldResponses).length > 0 ? fieldResponses : undefined;
+        return traveler;
       });
       const result = await this.travelerRepo.save(travelers);
       return {
