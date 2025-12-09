@@ -58,6 +58,26 @@ export class VisaApplicationsService {
   }
 
   /**
+   * Check if a visa product is an eVisa based on its product name
+   * Checks for variations: "eVisa", "e-visa", "e visa", "evisa" (case-insensitive)
+   */
+  private isEVisa(productName: string): boolean {
+    if (!productName) return false;
+    const lowerName = productName.toLowerCase();
+    // Check for various eVisa patterns
+    return /e[\s-]?visa/i.test(lowerName) || lowerName.includes('evisa');
+  }
+
+  /**
+   * Determine if embassy selection is required for a visa product
+   * eVisa products do not require embassy selection
+   */
+  private requiresEmbassy(visaProduct: VisaProduct): boolean {
+    if (!visaProduct || !visaProduct.productName) return true;
+    return !this.isEVisa(visaProduct.productName);
+  }
+
+  /**
    * Normalize fieldResponses structure for backward compatibility
    * Migrates old nested structure to new flat structure
    * Returns Record with string keys to support both number and string field IDs
@@ -143,17 +163,8 @@ export class VisaApplicationsService {
         );
       }
 
-      // Validate embassy exists if embassyId is provided
-      if (createDto.embassyId) {
-        const embassy = await this.embassyRepo.findOne({
-          where: { id: createDto.embassyId },
-        });
-        if (!embassy) {
-          throw new NotFoundException(
-            `Embassy with ID ${createDto.embassyId} not found`,
-          );
-        }
-      }
+      // Embassy selection is now handled in the additional info form, not during application creation
+      // No embassy validation here - embassy will be selected later
 
       // Generate application number
       const applicationNumber = await this.generateApplicationNumber();
@@ -169,12 +180,14 @@ export class VisaApplicationsService {
       const totalAmount = governmentFee + serviceFee + processingFee;
 
       // Extract travelers and draftData from DTO (if provided) before creating application
-      const { travelers, draftData, currentStep, ...applicationData } = createDto;
+      // Also exclude embassyId - embassy selection is handled in additional info form, not during creation
+      const { travelers, draftData, currentStep, embassyId, ...applicationData } = createDto;
 
       // Create application
       const application = this.applicationRepo.create({
         ...applicationData,
         applicationNumber,
+        embassyId: null, // Embassy selection is handled later in additional info form
         governmentFee,
         serviceFee,
         processingFee,
@@ -672,6 +685,7 @@ export class VisaApplicationsService {
         customerId: application.customerId,
         visaProductId: application.visaProductId,
         visaProductName: application.visaProduct?.productName || '',
+        requiresEmbassy: application.visaProduct ? this.requiresEmbassy(application.visaProduct) : true,
         nationality: application.nationality,
         destinationCountry: application.destinationCountry,
         embassy: application.embassy ? {
@@ -1778,6 +1792,7 @@ export class VisaApplicationsService {
           customerId: app.customerId,
           visaProductId: app.visaProductId,
           visaProductName: app.visaProduct?.productName || '',
+          requiresEmbassy: app.visaProduct ? this.requiresEmbassy(app.visaProduct) : true,
           nationality: app.nationality,
           destinationCountry: app.destinationCountry,
           embassy: app.embassy ? {
@@ -2167,17 +2182,8 @@ export class VisaApplicationsService {
         );
       }
 
-      // Validate embassy exists if embassyId is provided
-      if (submitDto.embassyId) {
-        const embassy = await queryRunner.manager.findOne(Embassy, {
-          where: { id: submitDto.embassyId },
-        });
-        if (!embassy) {
-          throw new NotFoundException(
-            `Embassy with ID ${submitDto.embassyId} not found`,
-          );
-        }
-      }
+      // Embassy selection is now handled in the additional info form, not during submission
+      // No embassy validation here - embassy will be selected later if needed
 
       // Validate visaType - use draft's visaType if submitDto.visaType is empty
       let finalVisaType = submitDto.visaType;

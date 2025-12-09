@@ -34,7 +34,7 @@ export class EmailService {
     const msg = {
       to,
       from: fromEmail,
-      subject: 'Welcome to iVisa123',
+      subject: 'Welcome to Visa123',
       html: `
         <!DOCTYPE html>
         <html>
@@ -55,11 +55,11 @@ export class EmailService {
         <body>
           <div class="container">
             <div class="header">
-              <h1>Welcome to iVisa123</h1>
+              <h1>Welcome to Visa123</h1>
             </div>
             <div class="content">
               <p>Dear ${customerName},</p>
-              <p>Thank you for creating your account with iVisa123.</p>
+              <p>Thank you for creating your account with Visa123.</p>
               <p style="text-align: center;">
                 <a href="${loginUrl}" class="button">Login to Your Account</a>
               </p>
@@ -70,7 +70,7 @@ export class EmailService {
                 New Orders: <a href="mailto:sophie@visa123.co.uk">sophie@visa123.co.uk</a><br>
                 Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
               </div>
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -81,7 +81,7 @@ export class EmailService {
       `,
       text: `Dear ${customerName},
 
-Thank you for creating your account with iVisa123.
+Thank you for creating your account with Visa123.
 
 Login to your account: ${loginUrl}
 
@@ -93,7 +93,7 @@ New Orders: sophie@visa123.co.uk
 Customer Support: support@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -201,10 +201,6 @@ iVisa123 Team`,
               </div>
               ` : ''}
               
-              <p style="text-align: center;">
-                <a href="${trackingUrl}" class="button">Track Your Application</a>
-              </p>
-              
               <p>Our team will review your application within 24-48 hours. You'll receive email notifications for any status updates.</p>
               
               <div class="contact-info">
@@ -213,7 +209,7 @@ iVisa123 Team`,
                 Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -240,7 +236,6 @@ TOTAL PAID: $${paymentDetails.totalAmount.toFixed(2)}
 
 ${paymentDetails.paymentMethod ? `Payment Method: ${paymentDetails.paymentMethod}\n` : ''}${paymentDetails.transactionId ? `Transaction ID: ${paymentDetails.transactionId}\n` : ''}${paymentDetails.paidAt ? `Date: ${new Date(paymentDetails.paidAt).toLocaleString()}\n` : ''}
 ` : ''}
-Track your application: ${trackingUrl}
 
 Our team will review your application within 24-48 hours. You'll receive email notifications for any status updates.
 
@@ -249,7 +244,7 @@ General Inquiry: opportunity@visa123.co.uk
 Customer Support: support@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -314,10 +309,6 @@ iVisa123 Team`,
               
               ${notes ? `<p><strong>Note from our team:</strong><br>${notes}</p>` : ''}
               
-              <p style="text-align: center;">
-                <a href="${trackingUrl}" class="button">Submit Additional Information</a>
-              </p>
-              
               <p>Please provide the requested information as soon as possible. Your application processing will resume once we receive the information.</p>
               
               <div class="contact-info">
@@ -326,7 +317,7 @@ iVisa123 Team`,
                 General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -341,16 +332,14 @@ We need some additional information to process your visa application.
 
 Application Number: ${applicationNumber}
 
-${notes ? `Note from our team:\n${notes}\n\n` : ''}Please log in to submit the necessary details: ${trackingUrl}
-
-Please provide the requested information as soon as possible. Your application processing will resume once we receive the information.
+${notes ? `Note from our team:\n${notes}\n\n` : ''}Please provide the requested information as soon as possible. Your application processing will resume once we receive the information.
 
 Need Help?
 Customer Support: support@visa123.co.uk
 General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -415,10 +404,6 @@ iVisa123 Team`,
               
               ${notes ? `<p><strong>Note from our team:</strong><br>${notes}</p>` : ''}
               
-              <p style="text-align: center;">
-                <a href="${trackingUrl}" class="button">Resubmit Your Application</a>
-              </p>
-              
               <p>Please review your application and make the necessary corrections. Our team will review your resubmission promptly.</p>
               
               <div class="contact-info">
@@ -427,7 +412,7 @@ iVisa123 Team`,
                 General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -442,16 +427,14 @@ We've reviewed your visa application and found that some information needs to be
 
 Application Number: ${applicationNumber}
 
-${notes ? `Note from our team:\n${notes}\n\n` : ''}Please review your application and make the necessary corrections: ${trackingUrl}
-
-Our team will review your resubmission promptly.
+${notes ? `Note from our team:\n${notes}\n\n` : ''}Please review your application and make the necessary corrections. Our team will review your resubmission promptly.
 
 Need Help?
 Customer Support: support@visa123.co.uk
 General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -513,10 +496,6 @@ iVisa123 Team`,
                 <strong>Application Number:</strong> ${applicationNumber}
               </div>
               
-              <p style="text-align: center;">
-                <a href="${trackingUrl}" class="button">Track Your Application</a>
-              </p>
-              
               <p>We'll notify you via email once there are any updates to your application status.</p>
               
               <div class="contact-info">
@@ -524,7 +503,7 @@ iVisa123 Team`,
                 Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -539,15 +518,13 @@ Your visa application is now being processed.
 
 Application Number: ${applicationNumber}
 
-Track your application: ${trackingUrl}
-
 We'll notify you via email once there are any updates to your application status.
 
 Questions?
 Customer Support: support@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -610,11 +587,7 @@ iVisa123 Team`,
                 <strong>Status:</strong> Completed
               </div>
               
-              <p style="text-align: center;">
-                <a href="${trackingUrl}" class="button">View Application Details</a>
-              </p>
-              
-              <p>Thank you for choosing iVisa123 for your visa application needs.</p>
+              <p>Thank you for choosing Visa123 for your visa application needs.</p>
               
               <div class="contact-info">
                 <strong>Contact Us:</strong><br>
@@ -622,7 +595,7 @@ iVisa123 Team`,
                 General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -638,16 +611,14 @@ Your visa application has been successfully completed and processed.
 Application Number: ${applicationNumber}
 Status: Completed
 
-View your application details: ${trackingUrl}
-
-Thank you for choosing iVisa123 for your visa application needs.
+Thank you for choosing Visa123 for your visa application needs.
 
 Contact Us:
 Customer Support: support@visa123.co.uk
 General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -711,10 +682,6 @@ iVisa123 Team`,
                 <strong>Reason:</strong> ${rejectionReason}
               </div>
               
-              <p style="text-align: center;">
-                <a href="${trackingUrl}" class="button">View Application Details</a>
-              </p>
-              
               <p>If you have any questions about this decision, please contact our support team.</p>
               
               <div class="contact-info">
@@ -723,7 +690,7 @@ iVisa123 Team`,
                 General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -739,8 +706,6 @@ Unfortunately, your visa application has been rejected.
 Application Number: ${applicationNumber}
 Reason: ${rejectionReason}
 
-View your application details: ${trackingUrl}
-
 If you have any questions about this decision, please contact our support team.
 
 Need Help?
@@ -748,7 +713,7 @@ Customer Support: support@visa123.co.uk
 General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -778,7 +743,7 @@ iVisa123 Team`,
     const msg = {
       to,
       from: fromEmail,
-      subject: 'Welcome to iVisa123 - Your Admin Account',
+      subject: 'Welcome to Visa123 - Your Admin Account',
       html: `
         <!DOCTYPE html>
         <html>
@@ -800,11 +765,11 @@ iVisa123 Team`,
         <body>
           <div class="container">
             <div class="header">
-              <h1>Welcome to iVisa123</h1>
+              <h1>Welcome to Visa123</h1>
             </div>
             <div class="content">
               <p>Hello,</p>
-              <p>You have been added as a sub-admin to the iVisa123 platform. Your account has been created and is ready to use.</p>
+              <p>You have been added as a sub-admin to the Visa123 platform. Your account has been created and is ready to use.</p>
               
               <div class="credentials-box">
                 <strong>Your Login Credentials:</strong><br><br>
@@ -823,7 +788,7 @@ iVisa123 Team`,
                 General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please keep your credentials secure.</p>
@@ -832,9 +797,9 @@ iVisa123 Team`,
         </body>
         </html>
       `,
-      text: `Welcome to iVisa123!
+      text: `Welcome to Visa123!
 
-You have been added as a sub-admin to the iVisa123 platform. Your account has been created and is ready to use.
+You have been added as a sub-admin to the Visa123 platform. Your account has been created and is ready to use.
 
 Your Login Credentials:
 Email: ${email}
@@ -848,7 +813,7 @@ Need Assistance?
 General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -910,10 +875,6 @@ iVisa123 Team`,
                 <strong>Application Number:</strong> ${applicationNumber}
               </div>
               
-              <p style="text-align: center;">
-                <a href="${trackingUrl}" class="button">Track Your Application</a>
-              </p>
-              
               <p>Our team will review the submitted information and continue processing your application. You'll receive email notifications for any status updates.</p>
               
               <div class="contact-info">
@@ -921,7 +882,7 @@ iVisa123 Team`,
                 Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -936,15 +897,13 @@ We have received the additional information you submitted for your visa applicat
 
 Application Number: ${applicationNumber}
 
-Track your application: ${trackingUrl}
-
 Our team will review the submitted information and continue processing your application. You'll receive email notifications for any status updates.
 
 Questions?
 Customer Support: support@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -1030,7 +989,7 @@ iVisa123 Team`,
                 New Orders: <a href="mailto:sophie@visa123.co.uk">sophie@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -1054,7 +1013,7 @@ Customer Support: support@visa123.co.uk
 New Orders: sophie@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -1145,7 +1104,7 @@ iVisa123 Team`,
                 General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -1177,7 +1136,7 @@ New Orders: sophie@visa123.co.uk
 General Inquiry: opportunity@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -1286,7 +1245,7 @@ iVisa123 Team`,
             </div>
             <div class="content">
               <p>Dear ${referrerName},</p>
-              <p>Thank you for referring a friend to iVisa123!</p>
+              <p>Thank you for referring a friend to Visa123!</p>
               
               <div class="info-box">
                 <strong>Referral Details:</strong><br>
@@ -1302,7 +1261,7 @@ iVisa123 Team`,
                 Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -1313,7 +1272,7 @@ iVisa123 Team`,
       `,
       text: `Dear ${referrerName},
 
-Thank you for referring a friend to iVisa123!
+Thank you for referring a friend to Visa123!
 
 Referral Details:
 Email: ${referredEmail}
@@ -1326,7 +1285,7 @@ Questions?
 Customer Support: support@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {
@@ -1422,7 +1381,7 @@ iVisa123 Team`,
                 Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
               </div>
               
-              <p>Best regards,<br>iVisa123 Team</p>
+              <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply to this message.</p>
@@ -1455,7 +1414,7 @@ Questions?
 Customer Support: support@visa123.co.uk
 
 Best regards,
-iVisa123 Team`,
+Visa123 Team`,
     };
 
     try {

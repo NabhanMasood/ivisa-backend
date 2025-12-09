@@ -649,7 +649,11 @@ export class VisaProductFieldsService {
         return !isNaN(fieldIdNum);
       });
 
+      // Declare at function level so they're accessible in the return statement
       const invalidFieldIds: Array<number | string> = [];
+      const fieldsToSkip: Array<number | string> = [];
+      const skippedFieldsInfo: Array<{ fieldId: number | string; reason: string; targetTravelerId?: number }> = [];
+
       for (const response of validRegularFields) {
         // Skip if fieldId is null/undefined
         if (response.fieldId === null || response.fieldId === undefined) {
@@ -659,9 +663,43 @@ export class VisaProductFieldsService {
         // Ensure fieldId is a number for regular fields
         const fieldIdNum = typeof response.fieldId === 'number' ? response.fieldId : Number(response.fieldId);
         const field = fieldMap.get(fieldIdNum) || fieldMap.get(String(fieldIdNum));
+
         if (!field) {
+          // For negative IDs (admin fields), check if they exist but are for a different traveler/context
+          if (fieldIdNum < 0) {
+            const adminField = adminFieldsAll.find((f: any) => f.id === fieldIdNum);
+            if (adminField) {
+              // Field exists but is for a different traveler/context
+              // Log warning and skip this field instead of throwing error
+              const reason = `Field exists but is for traveler ${adminField.travelerId || 'application'}, current context: ${submitDto.travelerId || 'application'}`;
+              console.log(
+                `⚠️ Field ${fieldIdNum} (${adminField.question || 'unknown'}) exists but is for ` +
+                `traveler ${adminField.travelerId || 'application'}, ` +
+                `current submission context: ${submitDto.travelerId || 'application'}. ` +
+                `Skipping this field.`
+              );
+              fieldsToSkip.push(response.fieldId);
+              skippedFieldsInfo.push({
+                fieldId: response.fieldId,
+                reason,
+                targetTravelerId: adminField.travelerId,
+              });
+              continue;
+            }
+          }
+
           invalidFieldIds.push(response.fieldId);
         }
+      }
+
+      // Remove skipped fields from responses
+      if (fieldsToSkip.length > 0) {
+        submitDto.responses = submitDto.responses.filter(
+          (r) => r.fieldId !== null && r.fieldId !== undefined && !fieldsToSkip.includes(r.fieldId)
+        );
+        console.log(
+          `⚠️ Filtered out ${fieldsToSkip.length} field(s) that don't match the submission context: ${fieldsToSkip.join(', ')}`
+        );
       }
 
       if (invalidFieldIds.length > 0) {
@@ -766,13 +804,16 @@ export class VisaProductFieldsService {
         }
 
         if (field.fieldType === 'upload') {
-          if (!response.filePath) {
+          // Only require filePath if the field is required
+          if (field.isRequired && !response.filePath) {
             throw new BadRequestException(
               `File path is required for upload field: ${field.question}`,
             );
           }
         } else {
-          if (!response.value) {
+          // Only require value if the field is required
+          // Allow empty/null values for optional fields
+          if (field.isRequired && (response.value === null || response.value === undefined || response.value === '')) {
             throw new BadRequestException(
               `Value is required for field: ${field.question}`,
             );
@@ -864,18 +905,28 @@ export class VisaProductFieldsService {
         }
 
 
-        // Validate resubmission target (backward compatibility)
+        // Validate resubmission target
+        // Allow travelers to submit their data even if there are requests for other travelers
+        // Only block if there's a specific blocking condition (old system with specific traveler target)
+        // New system (resubmissionRequests) allows parallel submissions for different travelers
+
+        // Old system fallback: Only block if old system has a specific traveler request that doesn't match
         if (
           (application.status === 'resubmission' ||
             application.status === 'Additional Info required') &&
           application.resubmissionTarget === 'traveler' &&
           application.resubmissionTravelerId &&
-          application.resubmissionTravelerId !== submittedTravelerId
+          application.resubmissionTravelerId !== submittedTravelerId &&
+          (!application.resubmissionRequests || application.resubmissionRequests.length === 0)
         ) {
+          // Old system: Block if there's a specific traveler request that doesn't match
           throw new BadRequestException(
             `Resubmission is requested for traveler ID ${application.resubmissionTravelerId}. Please submit responses for that traveler.`,
           );
         }
+
+        // New system: Allow submissions - travelers can submit their data independently
+        // The frontend should handle showing only relevant fields based on resubmissionRequests
 
 
         // Initialize and merge responses
@@ -1153,16 +1204,9 @@ export class VisaProductFieldsService {
             return isSpecificTravelerRequest;
           });
 
-          // Only block if there are specific traveler requests AND NO traveler 1 request
-          // This means we should allow application-level submission if traveler 1 has a pending request
-          if (specificTravelerRequests.length > 0 && traveler1Requests.length === 0) {
-            const firstRequestTravelerId = specificTravelerRequests[0].travelerId;
-            if (typeof firstRequestTravelerId === 'number') {
-              throw new BadRequestException(
-                `Resubmission is requested for traveler ID ${firstRequestTravelerId}. Please submit traveler-specific responses.`,
-              );
-            }
-          }
+          // Allow application-level submissions even if there are traveler-specific requests
+          // The frontend should handle showing only relevant fields based on resubmissionRequests
+          // Travelers can submit their data independently - no blocking needed here
         }
 
         // Check OLD system: resubmissionTarget and resubmissionTravelerId
@@ -1436,14 +1480,28 @@ export class VisaProductFieldsService {
       }
 
 
-      return {
+      // Build response with information about filtered fields
+      const responseMessage = submitDto.travelerId
+        ? 'Traveler field responses submitted successfully'
+        : 'Application field responses submitted successfully';
+
+      const responseData: any = {
         status: true,
-        message: submitDto.travelerId
-          ? 'Traveler field responses submitted successfully'
-          : 'Application field responses submitted successfully',
+        message: responseMessage,
         count: Object.keys(responses).length,
         data: responses,
       };
+
+      // Include information about filtered fields if any were skipped
+      // Note: fieldsToSkip and skippedFieldsInfo are declared in the validation block above
+      // They will be in scope here if the validation code executed
+      if (typeof fieldsToSkip !== 'undefined' && fieldsToSkip.length > 0) {
+        responseData.filteredFields = skippedFieldsInfo || [];
+        responseData.warning = `${fieldsToSkip.length} field(s) were filtered out because they don't match the submission context. These fields should be submitted with the correct traveler ID.`;
+        console.log(`📤 Returning response with ${fieldsToSkip.length} filtered fields info:`, skippedFieldsInfo);
+      }
+
+      return responseData;
     } catch (error) {
       if (
         error instanceof NotFoundException ||
@@ -1761,16 +1819,39 @@ export class VisaProductFieldsService {
 
         responses = fieldResponses || {};
 
-        // ✅ NEW: Also include all traveler responses when querying application-level
-        // This ensures admin-requested fields (stored in traveler fieldResponses) are visible
+        // ✅ NEW: Also include traveler responses when querying application-level
+        // BUT only include responses for fields that are relevant to application-level context
+        // (i.e., product fields or admin fields with travelerId: undefined)
+        // This prevents showing responses for traveler-specific admin fields that don't belong here
         if (application.travelers && application.travelers.length > 0) {
           console.log(`🔍 [RESPONSES] Querying application-level, merging responses from ${application.travelers.length} travelers`);
+
+          // Get list of valid field IDs for application-level context
+          const validFieldIds = new Set<number | string>();
+          // Add all product field IDs
+          productFields.forEach(field => {
+            validFieldIds.add(field.id);
+            validFieldIds.add(String(field.id));
+          });
+          // Add application-level admin field IDs (travelerId: undefined)
+          adminFieldsForContext.forEach((field: any) => {
+            validFieldIds.add(field.id);
+            validFieldIds.add(String(field.id));
+          });
+          // Add passport field keys
+          validFieldIds.add('_passport_number');
+          validFieldIds.add('_passport_expiry_date');
+          validFieldIds.add('_residence_country');
+          validFieldIds.add('_has_schengen_visa');
+
           application.travelers.forEach((traveler) => {
             if (traveler.fieldResponses && typeof traveler.fieldResponses === 'object') {
-              // Merge traveler responses into the main responses object
+              // Only merge responses for fields that are valid for application-level context
               Object.keys(traveler.fieldResponses).forEach((key) => {
-                // Only add if not already present (application-level takes precedence)
-                if (!responses[key]) {
+                // Only add if:
+                // 1. Not already present (application-level takes precedence)
+                // 2. AND the field is valid for application-level context
+                if (!responses[key] && validFieldIds.has(key)) {
                   responses[key] = traveler.fieldResponses![key];
                 }
               });
@@ -1953,18 +2034,47 @@ export class VisaProductFieldsService {
           });
         });
 
-        // 2. Add ALL admin fields (with or without responses - for admin viewing)
-        if (adminFieldsAll.length > 0) {
+        // 2. Add admin fields
+        // When querying application-level (no travelerId), return ALL admin fields so frontend can match responses
+        // When querying for a specific traveler, only return fields for that traveler
+        const adminFieldsToAdd = !travelerId && !shouldRestrictFields
+          ? adminFieldsAll  // Return all admin fields for application-level queries
+          : adminFieldsForContext;  // Return context-filtered fields for traveler-specific queries
+
+        if (adminFieldsToAdd.length > 0) {
           const processedAdminFieldIds = new Set<number>();
 
-          adminFieldsAll.forEach((field: any) => {
+          adminFieldsToAdd.forEach((field: any) => {
             if (!processedAdminFieldIds.has(field.id)) {
               processedAdminFieldIds.add(field.id);
 
               const response = responses[field.id] || responses[String(field.id)];
 
+              // Ensure we have the question text for display
+              // Admin fields should have a 'question' property
+              const questionText = field.question || field.questionText || `Field ${field.id}`;
+
+              // Log to debug missing question text
+              if (!field.question && !field.questionText) {
+                console.log(`⚠️ [ADMIN FIELD] Field ${field.id} missing question text. Field structure:`, Object.keys(field));
+              }
+
               combinedFields.push({
-                ...field,
+                id: field.id,
+                question: questionText,
+                questionText: questionText, // Frontend may use this
+                fieldType: field.fieldType || 'text',
+                placeholder: field.placeholder,
+                isRequired: field.isRequired ?? false,
+                displayOrder: field.displayOrder ?? 0,
+                options: field.options,
+                allowedFileTypes: field.allowedFileTypes,
+                maxFileSizeMB: field.maxFileSizeMB,
+                minLength: field.minLength,
+                maxLength: field.maxLength,
+                isActive: field.isActive !== false,
+                travelerId: field.travelerId,
+                source: 'admin',
                 response: response
                   ? {
                     value: response.value,
@@ -1975,12 +2085,11 @@ export class VisaProductFieldsService {
                   }
                   : null,
                 editable: false, // Read-only in admin view
-                source: 'admin',
               });
             }
           });
 
-          console.log(`🔍 [ADMIN FIELDS] Added ${processedAdminFieldIds.size} admin fields (with and without responses)`);
+          console.log(`🔍 [ADMIN FIELDS] Added ${processedAdminFieldIds.size} admin fields (with and without responses) for context: travelerId=${travelerId || 'application'} (${!travelerId && !shouldRestrictFields ? 'all fields' : 'context-filtered'})`);
         }
       }
 
