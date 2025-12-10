@@ -1,12 +1,13 @@
-import { Controller, Get, Post, Body, Query, BadRequestException, HttpCode, HttpStatus, UseFilters, Param, Delete, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, BadRequestException, HttpCode, HttpStatus, UseFilters, Param, Delete, ParseIntPipe, Patch } from '@nestjs/common';
 import { NationalitiesService } from './nationalities.service';
 import { CreateNationalityDto } from './dto/create-nationality.dto';
+import { UpdateNationalityDto } from './dto/update-nationality.dto';
 import { NationalitiesHttpExceptionFilter } from './http-exception.filter';
 
 @Controller('nationalities')
 @UseFilters(NationalitiesHttpExceptionFilter)
 export class NationalitiesController {
-  constructor(private readonly service: NationalitiesService) {}
+  constructor(private readonly service: NationalitiesService) { }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -81,18 +82,58 @@ export class NationalitiesController {
   }
 
   // Get products for nationality-destination combination (when view is clicked on destination)
+  // includeFreeVisas: query parameter to include free visa products (for admin use)
   @Get(':nationality/:destination/products')
   async getProductsByNationalityAndDestination(
     @Param('nationality') nationality: string,
     @Param('destination') destination: string,
+    @Query('includeFreeVisas') includeFreeVisas?: string,
   ) {
     try {
-      const result = await this.service.getProductsByNationalityAndDestination(nationality, destination);
+      // Convert query parameter to boolean (default false for client-side)
+      const includeFree = includeFreeVisas === 'true' || includeFreeVisas === '1';
+      const result = await this.service.getProductsByNationalityAndDestination(
+        nationality,
+        destination,
+        includeFree,
+      );
+
+      // If no products are configured (hasProducts: false), return status: false
+      if (!result.hasProducts) {
+        return {
+          status: false,
+          message: 'No visa products are configured for this nationality-destination combination',
+          data: [],
+        };
+      }
+
+      // If products exist but are free visa, return status: true with empty array
+      // If products exist and are not free, return status: true with products
       return {
         status: true,
-        message: 'Products fetched successfully',
-        data: result,
+        message: result.isFreeVisa
+          ? 'Visa is free for this nationality-destination combination'
+          : 'Products fetched successfully',
+        data: result.products,
+        isFreeVisa: result.isFreeVisa,
       };
+    } catch (err) {
+      throw new BadRequestException({ message: err.message });
+    }
+  }
+
+  /**
+   * Update a nationality record by ID
+   */
+  @Patch(':id')
+  @HttpCode(HttpStatus.OK)
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateNationalityDto,
+  ) {
+    try {
+      const result = await this.service.update(id, dto);
+      return { status: true, message: 'Nationality updated successfully', data: result };
     } catch (err) {
       throw new BadRequestException({ message: err.message });
     }

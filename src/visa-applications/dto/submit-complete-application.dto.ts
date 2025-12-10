@@ -169,8 +169,8 @@ export class SubmitCompleteApplicationDto {
 
   @IsString()
   @IsNotEmpty({ message: 'Visa type is required' })
-  @Matches(/^\d+-(single|multiple)$/, {
-    message: 'Visa type must be in format: {validity}-{entryType} (e.g., 60-single, 90-multiple, 180-single)',
+  @Matches(/^\d+-.+$/, {
+    message: 'Visa type must be in format: {validity}-{entryType} (e.g., 60-single, 90-multiple, 180-single, or custom entry names)',
   })
   visaType: string;
 

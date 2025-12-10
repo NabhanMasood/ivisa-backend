@@ -226,6 +226,7 @@ export class VisaProductService {
         duration: sourceProduct.duration,
         validity: sourceProduct.validity,
         entryType: sourceProduct.entryType,
+        customEntryName: sourceProduct.customEntryName,
         govtFee: sourceProduct.govtFee,
         serviceFee: sourceProduct.serviceFee,
         totalAmount: sourceProduct.totalAmount,

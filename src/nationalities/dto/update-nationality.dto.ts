@@ -1,18 +1,18 @@
-import { IsNotEmpty, IsString, IsOptional, IsNumber, Min, IsBoolean } from 'class-validator';
+import { IsOptional, IsString, IsNumber, Min, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class CreateNationalityDto {
+export class UpdateNationalityDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  nationality: string;
+  nationality?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  destination: string;
+  destination?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  productName: string;
+  productName?: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -37,3 +37,4 @@ export class CreateNationalityDto {
   @IsBoolean()
   isFreeVisa?: boolean;
 }
+

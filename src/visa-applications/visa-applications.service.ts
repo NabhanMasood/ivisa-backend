@@ -2194,13 +2194,13 @@ export class VisaApplicationsService {
       // Final validation: visaType must be in the correct format
       if (!finalVisaType || finalVisaType.trim() === '') {
         throw new BadRequestException(
-          'Visa type is required. Expected format: "{validity}-{entryType}" (e.g., "30-single", "90-multiple", "180-single")',
+          'Visa type is required. Expected format: "{validity}-{entryType}" (e.g., "30-single", "90-multiple", "180-single", or custom entry names)',
         );
       }
 
-      if (!/^\d+-(single|multiple)$/.test(finalVisaType)) {
+      if (!/^\d+-.+$/.test(finalVisaType)) {
         throw new BadRequestException(
-          `Invalid visa type: "${finalVisaType}". Expected format: "{validity}-{entryType}" (e.g., "30-single", "90-multiple", "180-single")`,
+          `Invalid visa type: "${finalVisaType}". Expected format: "{validity}-{entryType}" (e.g., "30-single", "90-multiple", "180-single", or custom entry names)`,
         );
       }
 

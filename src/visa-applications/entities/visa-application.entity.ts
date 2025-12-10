@@ -12,7 +12,6 @@ import {
 import { Customer } from '../../customers/entities/customer.entity';
 import { VisaProduct } from '../../visa-product/entities/visa-product.entity';
 import { Traveler } from '../../travelers/entities/traveler.entity';
-import { Payment } from '../../payments/entities/payment.entity';
 import { Embassy } from '../../embassies/entities/embassy.entity';
 
 // ✅ NEW: Interface for resubmission requests
@@ -132,10 +131,17 @@ export class VisaApplication {
   })
   travelers: Traveler[];
 
-  @OneToOne(() => Payment, (payment) => payment.application, {
-    cascade: true,
-  })
-  payment: Payment;
+  @OneToOne(
+    () => {
+      const { Payment } = require('../../payments/entities/payment.entity');
+      return Payment;
+    },
+    (payment: any) => payment.application,
+    {
+      cascade: true,
+    },
+  )
+  payment: any;
 
   @Column({ type: 'json', nullable: true })
   fieldResponses?: Record<string | number, {

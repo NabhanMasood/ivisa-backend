@@ -23,6 +23,9 @@ export class Nationality {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   totalAmount: number;
 
+  @Column({ type: 'boolean', default: false })
+  isFreeVisa: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

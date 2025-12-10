@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsNumber, Min, IsArray, ValidateNested, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, Min, IsArray, ValidateNested, IsOptional, IsIn, ValidateIf } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ProcessingFeeDto } from './processing-fee.dto';
 
@@ -21,7 +21,15 @@ export class CreateVisaProductDto {
 
   @IsString()
   @IsNotEmpty()
+  @IsIn(['single', 'multiple', 'custom'], {
+    message: 'entryType must be one of: single, multiple, or custom',
+  })
   entryType: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @ValidateIf((o) => o.entryType === 'custom')
+  customEntryName?: string;
 
   @IsNumber()
   @Min(0)

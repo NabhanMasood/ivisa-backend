@@ -21,6 +21,9 @@ export class VisaProduct {
   @Column({ type: 'varchar', length: 20, default: 'single' })
   entryType: string;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  customEntryName?: string;
+
   @Column('decimal', { precision: 10, scale: 2 })
   govtFee: number;
 
