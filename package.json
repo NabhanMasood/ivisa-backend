@@ -36,6 +36,7 @@
     "class-validator": "^0.14.2",
     "cloudinary": "^2.8.0",
     "cookie-parser": "^1.4.7",
+    "csv-parse": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "passport": "^0.7.0",

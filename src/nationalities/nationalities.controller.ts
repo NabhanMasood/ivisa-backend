@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Body, Query, BadRequestException, HttpCode, HttpStatus, UseFilters, Param, Delete, ParseIntPipe, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, BadRequestException, HttpCode, HttpStatus, UseFilters, Param, Delete, ParseIntPipe, Patch, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { NationalitiesService } from './nationalities.service';
 import { CreateNationalityDto } from './dto/create-nationality.dto';
 import { UpdateNationalityDto } from './dto/update-nationality.dto';
@@ -150,6 +152,48 @@ export class NationalitiesController {
       return { status: true, message: 'Nationality deleted successfully' };
     } catch (err) {
       throw new BadRequestException({ message: err.message });
+    }
+  }
+
+  /**
+   * Import visa products and nationalities from CSV file
+   * Supports both standard format (one row per product) and compact format (multiple products per row)
+   */
+  @Post('import')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(csv|text\/csv|text\/plain)$/)) {
+          return cb(
+            new BadRequestException('Only CSV files are allowed!'),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit
+      },
+    }),
+  )
+  async importFromCsv(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    try {
+      const result = await this.service.importFromCsv(file.buffer);
+      return {
+        status: result.success,
+        message: result.message,
+        data: result.summary,
+      };
+    } catch (error) {
+      throw new BadRequestException({
+        message: error.message || 'Error importing CSV file',
+      });
     }
   }
 }

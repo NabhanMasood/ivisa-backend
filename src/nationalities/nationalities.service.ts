@@ -6,6 +6,8 @@ import { CreateNationalityDto } from './dto/create-nationality.dto';
 import { UpdateNationalityDto } from './dto/update-nationality.dto';
 import { Country } from '../countries/entities/country.entity';
 import { VisaProduct } from '../visa-product/entities/visa-product.entity';
+import { ProcessingFee } from '../visa-product/entities/processing-fee.entity';
+import { parse } from 'csv-parse/sync';
 
 @Injectable()
 export class NationalitiesService {
@@ -13,6 +15,7 @@ export class NationalitiesService {
     @InjectRepository(Nationality) private nationalityRepo: Repository<Nationality>,
     @InjectRepository(Country) private countryRepo: Repository<Country>,
     @InjectRepository(VisaProduct) private visaProductRepo: Repository<VisaProduct>,
+    @InjectRepository(ProcessingFee) private processingFeeRepo: Repository<ProcessingFee>,
   ) { }
 
   // Create nationality with product
@@ -313,5 +316,411 @@ export class NationalitiesService {
       }
       throw new BadRequestException(error.message || 'Error deleting nationality');
     }
+  }
+
+  /**
+   * Import visa products and nationalities from CSV file
+   * Supports both standard format (one row per product) and compact format (multiple products per row)
+   */
+  async importFromCsv(fileBuffer: Buffer): Promise<{
+    success: boolean;
+    message: string;
+    summary: {
+      totalRows: number;
+      processed: number;
+      visaProductsCreated: number;
+      visaProductsReused: number;
+      nationalitiesCreated: number;
+      errors: Array<{ row: number; error: string }>;
+    };
+  }> {
+    const errors: Array<{ row: number; error: string }> = [];
+    const stats = {
+      visaProductsCreated: 0,
+      visaProductsReused: 0,
+      nationalitiesCreated: 0,
+    };
+    let processed = 0;
+
+    try {
+      // Parse CSV
+      const records = parse(fileBuffer.toString(), {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        relax_column_count: true,
+      });
+
+      if (!records || records.length === 0) {
+        throw new BadRequestException('CSV file is empty or invalid');
+      }
+
+      const totalRows = records.length;
+
+      // Determine format: compact format has 'products' column, standard has 'productName'
+      const firstRecord = records[0] as Record<string, any>;
+      const isCompactFormat = firstRecord.hasOwnProperty('products') && !firstRecord.hasOwnProperty('productName');
+      const isStandardFormat = firstRecord.hasOwnProperty('productName');
+
+      if (!isCompactFormat && !isStandardFormat) {
+        throw new BadRequestException('Invalid CSV format. Must be either standard format (with productName column) or compact format (with products column)');
+      }
+
+      // Process records
+      for (let i = 0; i < records.length; i++) {
+        const row = i + 2; // +2 because row 1 is header, and we're 0-indexed
+        const record = records[i];
+
+        try {
+          if (isCompactFormat) {
+            await this.processCompactFormatRow(record, row, errors, stats);
+          } else {
+            await this.processStandardFormatRow(record, row, errors, stats);
+          }
+          processed++;
+        } catch (error) {
+          errors.push({
+            row,
+            error: error.message || 'Unknown error processing row',
+          });
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        message: errors.length === 0
+          ? `Successfully imported ${processed} rows. Created ${stats.visaProductsCreated} visa products, reused ${stats.visaProductsReused}, and created ${stats.nationalitiesCreated} nationality records.`
+          : `Imported ${processed} rows with ${errors.length} errors. Created ${stats.visaProductsCreated} visa products, reused ${stats.visaProductsReused}, and created ${stats.nationalitiesCreated} nationality records.`,
+        summary: {
+          totalRows,
+          processed,
+          visaProductsCreated: stats.visaProductsCreated,
+          visaProductsReused: stats.visaProductsReused,
+          nationalitiesCreated: stats.nationalitiesCreated,
+          errors,
+        },
+      };
+    } catch (error) {
+      throw new BadRequestException(`Error parsing CSV: ${error.message}`);
+    }
+  }
+
+  /**
+   * Process a row in standard format (one row per product)
+   */
+  private async processStandardFormatRow(
+    record: any,
+    row: number,
+    errors: Array<{ row: number; error: string }>,
+    stats: { visaProductsCreated: number; visaProductsReused: number; nationalitiesCreated: number },
+  ): Promise<void> {
+    // Validate required fields
+    const requiredFields = ['nationality', 'destination', 'productName', 'duration', 'validity', 'entryType', 'govtFee', 'serviceFee', 'totalAmount'];
+    for (const field of requiredFields) {
+      if (!record[field] || record[field].trim() === '') {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+
+    const nationality = record.nationality.trim();
+    const destination = record.destination.trim();
+    const productName = record.productName.trim();
+    const duration = parseInt(record.duration, 10);
+    const validity = parseInt(record.validity, 10);
+    const entryType = record.entryType.trim().toLowerCase();
+    const customEntryName = record.customEntryName?.trim() || null;
+    const govtFee = parseFloat(record.govtFee);
+    const serviceFee = parseFloat(record.serviceFee);
+    const totalAmount = parseFloat(record.totalAmount);
+    const isFreeVisa = record.isFreeVisa?.toLowerCase() === 'true' || false;
+    const processingFeesStr = record.processingFees?.trim() || '';
+
+    // Validate entry type
+    if (!['single', 'multiple', 'custom'].includes(entryType)) {
+      throw new Error(`Invalid entryType: ${entryType}. Must be 'single', 'multiple', or 'custom'`);
+    }
+
+    if (entryType === 'custom' && !customEntryName) {
+      throw new Error('customEntryName is required when entryType is "custom"');
+    }
+
+    // Validate numeric fields
+    if (isNaN(duration) || duration < 1) {
+      throw new Error(`Invalid duration: ${record.duration}`);
+    }
+    if (isNaN(validity) || validity < 1) {
+      throw new Error(`Invalid validity: ${record.validity}`);
+    }
+    if (isNaN(govtFee) || govtFee < 0) {
+      throw new Error(`Invalid govtFee: ${record.govtFee}`);
+    }
+    if (isNaN(serviceFee) || serviceFee < 0) {
+      throw new Error(`Invalid serviceFee: ${record.serviceFee}`);
+    }
+    if (isNaN(totalAmount) || totalAmount < 0) {
+      throw new Error(`Invalid totalAmount: ${record.totalAmount}`);
+    }
+
+    // Check if nationality exists
+    const country = await this.countryRepo.findOne({
+      where: { countryName: nationality },
+    });
+    if (!country) {
+      throw new Error(`Nationality "${nationality}" does not exist in countries table`);
+    }
+
+    // Find or create visa product
+    let visaProduct = await this.visaProductRepo.findOne({
+      where: { country: destination, productName },
+    });
+
+    if (!visaProduct) {
+      // Create new visa product
+      visaProduct = this.visaProductRepo.create({
+        country: destination,
+        productName,
+        duration,
+        validity,
+        entryType,
+        customEntryName,
+        govtFee,
+        serviceFee,
+        totalAmount,
+      });
+      visaProduct = await this.visaProductRepo.save(visaProduct);
+      stats.visaProductsCreated++;
+
+      // Parse and create processing fees if provided
+      if (processingFeesStr) {
+        const processingFees = this.parseProcessingFees(processingFeesStr);
+        if (processingFees.length > 0 && visaProduct) {
+          const productId = visaProduct.id;
+          const fees = processingFees.map((fee) =>
+            this.processingFeeRepo.create({
+              ...fee,
+              visaProductId: productId,
+            }),
+          );
+          await this.processingFeeRepo.save(fees);
+        }
+      }
+    } else {
+      stats.visaProductsReused++;
+    }
+
+    // Check if nationality record already exists
+    const existingNationality = await this.nationalityRepo.findOne({
+      where: {
+        nationality,
+        destination,
+        productName,
+      },
+    });
+
+    if (!existingNationality) {
+      // Create nationality record
+      const nationalityRecord = this.nationalityRepo.create({
+        nationality,
+        destination,
+        productName,
+        govtFee: govtFee || null,
+        serviceFee: serviceFee || null,
+        totalAmount: totalAmount || null,
+        isFreeVisa,
+      } as Partial<Nationality>);
+      await this.nationalityRepo.save(nationalityRecord);
+      stats.nationalitiesCreated++;
+    }
+  }
+
+  /**
+   * Process a row in compact format (multiple products per row)
+   */
+  private async processCompactFormatRow(
+    record: any,
+    row: number,
+    errors: Array<{ row: number; error: string }>,
+    stats: { visaProductsCreated: number; visaProductsReused: number; nationalitiesCreated: number },
+  ): Promise<void> {
+    // Validate required fields
+    if (!record.nationality || !record.destination || !record.products) {
+      throw new Error('Missing required fields: nationality, destination, or products');
+    }
+
+    const nationality = record.nationality.trim();
+    const destination = record.destination.trim();
+    const productsStr = record.products.trim();
+
+    // Check if nationality exists
+    const country = await this.countryRepo.findOne({
+      where: { countryName: nationality },
+    });
+    if (!country) {
+      throw new Error(`Nationality "${nationality}" does not exist in countries table`);
+    }
+
+    // Parse products (semicolon-separated)
+    const productStrings = productsStr.split(';').map((p: string) => p.trim()).filter((p: string) => p.length > 0);
+
+    if (productStrings.length === 0) {
+      throw new Error('No products found in products column');
+    }
+
+    // Process each product
+    for (let j = 0; j < productStrings.length; j++) {
+      const productStr = productStrings[j];
+      try {
+        // Parse product: productName:duration:validity:entryType:customEntryName:govtFee:serviceFee:totalAmount:isFreeVisa:processingFees
+        const parts = productStr.split(':');
+        if (parts.length < 9) {
+          throw new Error(`Invalid product format. Expected at least 9 colon-separated values, got ${parts.length}`);
+        }
+
+        const productName = parts[0].trim();
+        const duration = parseInt(parts[1], 10);
+        const validity = parseInt(parts[2], 10);
+        const entryType = parts[3].trim().toLowerCase();
+        const customEntryName = parts[4]?.trim() || null;
+        const govtFee = parseFloat(parts[5]);
+        const serviceFee = parseFloat(parts[6]);
+        const totalAmount = parseFloat(parts[7]);
+        const isFreeVisa = parts[8]?.toLowerCase() === 'true' || false;
+        const processingFeesStr = parts.slice(9).join(':') || ''; // Rejoin in case processing fees contain colons
+
+        // Validate entry type
+        if (!['single', 'multiple', 'custom'].includes(entryType)) {
+          throw new Error(`Invalid entryType: ${entryType}. Must be 'single', 'multiple', or 'custom'`);
+        }
+
+        if (entryType === 'custom' && !customEntryName) {
+          throw new Error('customEntryName is required when entryType is "custom"');
+        }
+
+        // Validate numeric fields
+        if (isNaN(duration) || duration < 1) {
+          throw new Error(`Invalid duration: ${parts[1]}`);
+        }
+        if (isNaN(validity) || validity < 1) {
+          throw new Error(`Invalid validity: ${parts[2]}`);
+        }
+        if (isNaN(govtFee) || govtFee < 0) {
+          throw new Error(`Invalid govtFee: ${parts[5]}`);
+        }
+        if (isNaN(serviceFee) || serviceFee < 0) {
+          throw new Error(`Invalid serviceFee: ${parts[6]}`);
+        }
+        if (isNaN(totalAmount) || totalAmount < 0) {
+          throw new Error(`Invalid totalAmount: ${parts[7]}`);
+        }
+
+        // Find or create visa product
+        let visaProduct = await this.visaProductRepo.findOne({
+          where: { country: destination, productName },
+        });
+
+        if (!visaProduct) {
+          // Create new visa product
+          visaProduct = this.visaProductRepo.create({
+            country: destination,
+            productName,
+            duration,
+            validity,
+            entryType,
+            customEntryName,
+            govtFee,
+            serviceFee,
+            totalAmount,
+          });
+          visaProduct = await this.visaProductRepo.save(visaProduct);
+          stats.visaProductsCreated++;
+
+          // Parse and create processing fees if provided
+          if (processingFeesStr) {
+            const processingFees = this.parseProcessingFees(processingFeesStr);
+            if (processingFees.length > 0 && visaProduct) {
+              const productId = visaProduct.id;
+              const fees = processingFees.map((fee) =>
+                this.processingFeeRepo.create({
+                  ...fee,
+                  visaProductId: productId,
+                }),
+              );
+              await this.processingFeeRepo.save(fees);
+            }
+          }
+        } else {
+          stats.visaProductsReused++;
+        }
+
+        // Check if nationality record already exists
+        const existingNationality = await this.nationalityRepo.findOne({
+          where: {
+            nationality,
+            destination,
+            productName,
+          },
+        });
+
+        if (!existingNationality) {
+          // Create nationality record
+          const nationalityRecord = this.nationalityRepo.create({
+            nationality,
+            destination,
+            productName,
+            govtFee: govtFee || null,
+            serviceFee: serviceFee || null,
+            totalAmount: totalAmount || null,
+            isFreeVisa,
+          } as Partial<Nationality>);
+          await this.nationalityRepo.save(nationalityRecord);
+          stats.nationalitiesCreated++;
+        }
+      } catch (error) {
+        throw new Error(`Error processing product ${j + 1}: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * Parse processing fees string
+   * Format: feeType:timeValue:timeUnit:amount|feeType:timeValue:timeUnit:amount|...
+   */
+  private parseProcessingFees(processingFeesStr: string): Array<{
+    feeType: string;
+    timeValue: number;
+    timeUnit: string;
+    amount: number;
+  }> {
+    if (!processingFeesStr || processingFeesStr.trim() === '') {
+      return [];
+    }
+
+    const fees: Array<{ feeType: string; timeValue: number; timeUnit: string; amount: number }> = [];
+    const feeStrings = processingFeesStr.split('|').map((f: string) => f.trim()).filter((f: string) => f.length > 0);
+
+    for (const feeStr of feeStrings) {
+      const parts = feeStr.split(':');
+      if (parts.length !== 4) {
+        continue; // Skip invalid format
+      }
+
+      const feeType = parts[0].trim();
+      const timeValue = parseInt(parts[1], 10);
+      const timeUnit = parts[2].trim().toLowerCase();
+      const amount = parseFloat(parts[3]);
+
+      if (!feeType || isNaN(timeValue) || timeValue < 1 || !['hours', 'days'].includes(timeUnit) || isNaN(amount) || amount < 0) {
+        continue; // Skip invalid fee
+      }
+
+      fees.push({
+        feeType,
+        timeValue,
+        timeUnit,
+        amount,
+      });
+    }
+
+    return fees;
   }
 }

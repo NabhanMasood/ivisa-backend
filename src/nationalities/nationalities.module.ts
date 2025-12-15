@@ -5,10 +5,11 @@ import { NationalitiesService } from './nationalities.service';
 import { Nationality } from './entities/nationality.entity';
 import { Country } from '../countries/entities/country.entity';
 import { VisaProduct } from '../visa-product/entities/visa-product.entity';
+import { ProcessingFee } from '../visa-product/entities/processing-fee.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Nationality, Country, VisaProduct])],
+  imports: [TypeOrmModule.forFeature([Nationality, Country, VisaProduct, ProcessingFee])],
   controllers: [NationalitiesController],
   providers: [NationalitiesService]
 })
-export class NationalitiesModule {}
+export class NationalitiesModule { }
