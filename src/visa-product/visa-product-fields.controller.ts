@@ -76,6 +76,15 @@ export class VisaProductFieldsController {
   }
 
   /**
+   * Bulk delete custom fields (Admin only)
+   * Body: { fieldIds: number[] }
+   */
+  @Delete('bulk')
+  bulkRemove(@Body() body: { fieldIds: number[] }) {
+    return this.visaProductFieldsService.bulkRemove(body.fieldIds);
+  }
+
+  /**
    * Delete a custom field (Admin only)
    */
   @Delete(':id')

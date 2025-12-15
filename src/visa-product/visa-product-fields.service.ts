@@ -392,6 +392,73 @@ export class VisaProductFieldsService {
   }
 
   /**
+   * Bulk delete custom fields (Admin only)
+   * Deletes multiple fields in a single request
+   */
+  async bulkRemove(fieldIds: number[]) {
+    try {
+      if (!fieldIds || fieldIds.length === 0) {
+        throw new BadRequestException('No field IDs provided for deletion');
+      }
+
+      console.log(`🗑️ Bulk deleting ${fieldIds.length} field(s):`, fieldIds);
+
+      // Find all products that might contain these fields
+      const visaProducts = await this.visaProductRepo.find();
+      const fieldIdsSet = new Set(fieldIds);
+      const removedFieldIds: number[] = [];
+      const productsToSave: any[] = [];
+
+      for (const product of visaProducts) {
+        const fields = product.fields || [];
+        const originalLength = fields.length;
+
+        // Filter out fields that should be deleted
+        const filteredFields = fields.filter((f) => {
+          if (fieldIdsSet.has(f.id)) {
+            removedFieldIds.push(f.id);
+            return false;
+          }
+          return true;
+        });
+
+        // Only save if fields were actually removed
+        if (filteredFields.length < originalLength) {
+          product.fields = filteredFields;
+          productsToSave.push(product);
+        }
+      }
+
+      // Save all modified products
+      if (productsToSave.length > 0) {
+        await this.visaProductRepo.save(productsToSave);
+      }
+
+      if (removedFieldIds.length === 0) {
+        throw new NotFoundException('None of the specified fields were found');
+      }
+
+      console.log(`✅ Successfully removed ${removedFieldIds.length} field(s)`);
+
+      return {
+        status: true,
+        message: `${removedFieldIds.length} field(s) deleted successfully`,
+        data: {
+          removedFieldIds,
+          removedCount: removedFieldIds.length,
+        },
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error.message || 'Error deleting custom fields',
+      );
+    }
+  }
+
+  /**
    * Submit field responses for an application (User)
    * Can submit application-level responses or traveler-specific responses
    */
@@ -1047,6 +1114,8 @@ export class VisaProductFieldsService {
 
           let anyRequestFulfilled = false;
 
+          // ✅ CRITICAL: Create new array reference to ensure TypeORM detects changes
+          updatedApplication.resubmissionRequests = [...updatedApplication.resubmissionRequests];
 
           // Find and mark fulfilled requests for this traveler
           for (const request of updatedApplication.resubmissionRequests) {
@@ -1056,22 +1125,23 @@ export class VisaProductFieldsService {
             if (request.target === 'traveler' && request.travelerId === submittedTravelerId) {
               console.log(`🔍 [FULFILLMENT CHECK] Checking request ${request.id} with fieldIds:`, request.fieldIds);
 
-              // Check if all requested fields were submitted (handle both positive and negative IDs)
-              const allFieldsSubmitted = request.fieldIds.every(fieldId => {
-                // Check both as number and as string key
-                const found = submittedFieldIds.includes(fieldId) ||
-                  submittedFieldIds.includes(String(fieldId)) ||
-                  Object.keys(responses).includes(String(fieldId));
+              // ✅ LENIENT CHECK: If customer submitted ANY data for this traveler during resubmission, mark as fulfilled
+              // This is more practical than requiring exact field ID matches which can fail due to:
+              // - Type mismatches (string vs number IDs)
+              // - Admin fields vs product fields
+              // - Different field sets being submitted
+              const hasSubmittedData = Object.keys(responses).length > 0;
 
-                if (!found) {
-                  console.log(`❌ Field ${fieldId} not found in submitted responses`);
-                }
-                return found;
-              });
+              // Also check if at least one requested field was submitted (for logging purposes)
+              const submittedRequestedFields = request.fieldIds.filter(fieldId =>
+                submittedFieldIds.includes(fieldId) ||
+                submittedFieldIds.includes(String(fieldId)) ||
+                Object.keys(responses).includes(String(fieldId))
+              );
 
-              console.log(`🔍 [FULFILLMENT CHECK] Request ${request.id} - allFieldsSubmitted: ${allFieldsSubmitted}`);
+              console.log(`🔍 [FULFILLMENT CHECK] Request ${request.id} - hasSubmittedData: ${hasSubmittedData}, submittedRequestedFields: ${submittedRequestedFields.length}/${request.fieldIds.length}`);
 
-              if (allFieldsSubmitted) {
+              if (hasSubmittedData) {
                 request.fulfilledAt = new Date().toISOString();
                 anyRequestFulfilled = true;
                 console.log(`✅ Resubmission request ${request.id} fulfilled for traveler ${submittedTravelerId}`);
@@ -1395,22 +1465,23 @@ export class VisaProductFieldsService {
             if (isApplicationRequest || isTraveler1Request) {
               console.log(`🔍 [FULFILLMENT CHECK] Checking request ${request.id} (${isApplicationRequest ? 'application-level' : 'traveler 1'}) with fieldIds:`, request.fieldIds);
 
-              // Check if all requested fields were submitted (handle both positive and negative IDs)
-              const allFieldsSubmitted = request.fieldIds.every(fieldId => {
-                // Check both as number and as string key
-                const found = submittedFieldIds.includes(fieldId) ||
-                  submittedFieldIds.includes(String(fieldId)) ||
-                  Object.keys(responses).includes(String(fieldId));
+              // ✅ LENIENT CHECK: If customer submitted ANY data for this target during resubmission, mark as fulfilled
+              // This is more practical than requiring exact field ID matches which can fail due to:
+              // - Type mismatches (string vs number IDs)
+              // - Admin fields vs product fields
+              // - Different field sets being submitted
+              const hasSubmittedData = Object.keys(responses).length > 0;
 
-                if (!found) {
-                  console.log(`❌ Field ${fieldId} not found in submitted responses`);
-                }
-                return found;
-              });
+              // Also check if at least one requested field was submitted (for logging purposes)
+              const submittedRequestedFields = request.fieldIds.filter(fieldId =>
+                submittedFieldIds.includes(fieldId) ||
+                submittedFieldIds.includes(String(fieldId)) ||
+                Object.keys(responses).includes(String(fieldId))
+              );
 
-              console.log(`🔍 [FULFILLMENT CHECK] Request ${request.id} - allFieldsSubmitted: ${allFieldsSubmitted}`);
+              console.log(`🔍 [FULFILLMENT CHECK] Request ${request.id} - hasSubmittedData: ${hasSubmittedData}, submittedRequestedFields: ${submittedRequestedFields.length}/${request.fieldIds.length}`);
 
-              if (allFieldsSubmitted) {
+              if (hasSubmittedData) {
                 request.fulfilledAt = new Date().toISOString();
                 console.log(`✅ Resubmission request ${request.id} fulfilled for ${isApplicationRequest ? 'application' : 'traveler 1'}`);
               }

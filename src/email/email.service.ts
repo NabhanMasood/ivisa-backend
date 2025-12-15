@@ -1203,6 +1203,107 @@ Visa123 Team`,
   }
 
   /**
+   * Send notification email when user changes their password
+   */
+  async sendPasswordChangedEmail(
+    to: string,
+    customerName: string,
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL');
+
+    if (!fromEmail) {
+      this.logger.error('SENDGRID_FROM_EMAIL not configured');
+      return;
+    }
+
+    const changedAt = new Date().toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
+
+    const msg = {
+      to,
+      from: fromEmail,
+      subject: 'Your Password Has Been Changed - Visa123',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
+            .content { background-color: #f9f9f9; padding: 30px; }
+            .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+            .warning-box { background-color: #fff3e0; padding: 15px; border-left: 4px solid #ff9800; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Password Changed</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${customerName},</p>
+              <p>This is to confirm that your Visa123 account password was successfully changed.</p>
+
+              <div class="info-box">
+                <strong>Changed on:</strong> ${changedAt}
+              </div>
+
+              <div class="warning-box">
+                <strong>Didn't make this change?</strong><br>
+                If you did not change your password, please contact our support team immediately to secure your account.
+              </div>
+
+              <div class="contact-info">
+                <strong>Contact Support:</strong><br>
+                Email: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
+              </div>
+
+              <p>Best regards,<br>Visa123 Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated security notification. Please do not reply to this message.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `Dear ${customerName},
+
+This is to confirm that your Visa123 account password was successfully changed.
+
+Changed on: ${changedAt}
+
+Didn't make this change?
+If you did not change your password, please contact our support team immediately to secure your account.
+
+Contact Support:
+Email: support@visa123.co.uk
+
+Best regards,
+Visa123 Team`,
+    };
+
+    try {
+      await sgMail.send(msg);
+      this.logger.log(`Password changed notification email sent to ${to}`);
+    } catch (error) {
+      this.logger.error(`Failed to send password changed email to ${to}:`, error);
+    }
+  }
+
+  /**
    * Send confirmation email to referrer when they send a referral invitation
    */
   async sendReferralConfirmationEmail(

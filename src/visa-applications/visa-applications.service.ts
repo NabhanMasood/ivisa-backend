@@ -309,6 +309,9 @@ export class VisaApplicationsService {
         visaType: app.visaType,
         numberOfTravelers: app.numberOfTravelers,
         phoneNumber: app.phoneNumber,
+        processingType: app.processingType || null,
+        processingTime: app.processingTime || null,
+        processingFee: parseFloat(app.processingFee?.toString() || '0'),
         totalAmount: parseFloat(app.totalAmount.toString()),
         status: app.status,
         createdAt: app.createdAt.toLocaleDateString('en-GB', {
@@ -710,12 +713,13 @@ export class VisaApplicationsService {
         rejectionReason: application.rejectionReason,
         notes: application.notes,
 
-        resubmissionRequests: application.resubmissionRequests || [],
+        // ✅ Only include resubmission data when status is actually 'resubmission'
+        // This prevents stale resubmission requests from showing notifications
+        resubmissionRequests: application.status === 'resubmission' ? (application.resubmissionRequests || []) : [],
 
-
-        resubmissionTarget: application.resubmissionTarget || undefined,
-        resubmissionTravelerId: application.resubmissionTravelerId || undefined,
-        requestedFieldIds: application.requestedFieldIds || undefined,
+        resubmissionTarget: application.status === 'resubmission' ? (application.resubmissionTarget || undefined) : undefined,
+        resubmissionTravelerId: application.status === 'resubmission' ? (application.resubmissionTravelerId || undefined) : undefined,
+        requestedFieldIds: application.status === 'resubmission' ? (application.requestedFieldIds || undefined) : undefined,
 
         travelers: allTravelers, // ✅ Now includes fieldResponses for each traveler
         payment: application.payment || null,
@@ -1817,11 +1821,13 @@ export class VisaApplicationsService {
           rejectionReason: app.rejectionReason,
           notes: app.notes,
 
-          resubmissionRequests: app.resubmissionRequests || [],
+          // ✅ Only include resubmission data when status is actually 'resubmission'
+          // This prevents stale resubmission requests from showing notifications
+          resubmissionRequests: app.status === 'resubmission' ? (app.resubmissionRequests || []) : [],
 
-          resubmissionTarget: app.resubmissionTarget || undefined,
-          resubmissionTravelerId: app.resubmissionTravelerId || undefined,
-          requestedFieldIds: app.requestedFieldIds || undefined,
+          resubmissionTarget: app.status === 'resubmission' ? (app.resubmissionTarget || undefined) : undefined,
+          resubmissionTravelerId: app.status === 'resubmission' ? (app.resubmissionTravelerId || undefined) : undefined,
+          requestedFieldIds: app.status === 'resubmission' ? (app.requestedFieldIds || undefined) : undefined,
 
           travelers: allTravelers, // ✅ Traveler 1 (customer) + additional travelers
           payment: app.payment || null,
@@ -3356,6 +3362,55 @@ export class VisaApplicationsService {
         throw error;
       }
       throw new BadRequestException(error.message || 'Error removing admin field');
+    }
+  }
+
+  /**
+   * Remove multiple admin-only custom fields from an application in a single request
+   */
+  async removeAdminFields(id: number, fieldIds: number[]) {
+    try {
+      const application = await this.applicationRepo.findOne({ where: { id } });
+      if (!application) {
+        throw new NotFoundException(`Visa application with ID ${id} not found`);
+      }
+
+      if (!fieldIds || fieldIds.length === 0) {
+        throw new BadRequestException('No field IDs provided for deletion');
+      }
+
+      const before = application.adminRequestedFields || [];
+      const fieldIdsSet = new Set(fieldIds);
+      const after = before.filter((f: any) => !fieldIdsSet.has(f.id));
+
+      const removedCount = before.length - after.length;
+      if (removedCount === 0) {
+        throw new NotFoundException(
+          `None of the specified admin fields were found for this application`,
+        );
+      }
+
+      application.adminRequestedFields = after;
+      await this.applicationRepo.save(application);
+
+      return {
+        status: true,
+        message: `${removedCount} admin field(s) removed successfully`,
+        data: {
+          removedFieldIds: fieldIds.filter(fid =>
+            before.some((f: any) => f.id === fid)
+          ),
+          removedCount
+        },
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(error.message || 'Error removing admin fields');
     }
   }
 }

@@ -223,6 +223,10 @@ export class AuthService {
 
     await this.customerRepo.save(customer);
 
+    // Send password changed notification email
+    const customerName = customer.fullname || customer.email.split('@')[0];
+    this.emailService.sendPasswordChangedEmail(customer.email, customerName);
+
     return {
       status: true,
       message: 'Password changed successfully',

@@ -287,6 +287,26 @@ export class VisaApplicationsController {
   }
 
   /**
+   * DELETE /visa-applications/:id/admin-fields
+   * Remove multiple admin-only custom fields in a single request
+   * Body: { fieldIds: number[] }
+   */
+  @Delete(':id/admin-fields')
+  async removeAdminFields(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { fieldIds: number[] },
+  ) {
+    try {
+      return await this.visaApplicationsService.removeAdminFields(id, body.fieldIds);
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to remove admin fields',
+      });
+    }
+  }
+
+  /**
    * PATCH /visa-applications/:id/processing
    * Select processing type (Step 4 - CheckoutForm.vue)
    */
