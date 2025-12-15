@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Nationalities Test Interface</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    select, input[type="number"] { margin-bottom: 10px; width: 200px; }
+    .product-item { margin-bottom: 10px; }
+    .custom-price { display: none; margin-left: 20px; }
+  </style>
+</head>
+<body>
+  <h2>Nationalities Module Test</h2>
+
+  <!-- Nationality Dropdown -->
+  <div>
+    <label>Nationality:</label>
+    <select id="nationalityDropdown"></select>
+  </div>
+
+  <!-- Destination Dropdown -->
+  <div>
+    <label>Destination:</label>
+    <select id="destinationDropdown"></select>
+  </div>
+
+  <!-- Products List -->
+  <div>
+    <h3>Visa Products</h3>
+    <div id="productsList"></div>
+  </div>
+
+  <!-- Set Custom Price -->
+  <div>
+    <label>Set Custom Price:</label>
+    <input type="checkbox" id="customPriceSwitch" />
+  </div>
+
+  <!-- Selected Products for Custom Prices -->
+  <div id="selectedSection" style="display:none; margin-top: 10px;">
+    <h3>Selected Products (Custom Prices)</h3>
+    <div id="selectedProducts"></div>
+  </div>
+
+  <!-- Submit Button -->
+  <div>
+    <button id="submitBtn">Create Nationality</button>
+  </div>
+
+  <pre id="response"></pre>
+
+  <script src="interface.js"></script>
+</body>
+</html>
