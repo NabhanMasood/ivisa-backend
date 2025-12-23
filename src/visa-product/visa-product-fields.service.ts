@@ -17,6 +17,7 @@ import { EmailService } from '../email/email.service';
 import { BatchGetFieldsDto } from './dto/batch-get-fields.dto';
 import { BatchSaveFieldsDto, BatchFieldItemDto } from './dto/batch-save-fields.dto';
 import { CountriesService } from '../countries/countries.service';
+import { parse } from 'csv-parse/sync';
 
 @Injectable()
 export class VisaProductFieldsService {
@@ -3065,5 +3066,311 @@ export class VisaProductFieldsService {
         error.message || 'Error saving fields in batch',
       );
     }
+  }
+
+  /**
+   * Import additional info fields from CSV file
+   * Supports standard format: one row per field
+   */
+  async importFieldsFromCsv(fileBuffer: Buffer): Promise<{
+    success: boolean;
+    message: string;
+    summary: {
+      totalRows: number;
+      processed: number;
+      fieldsCreated: number;
+      fieldsUpdated: number;
+      productsAffected: number;
+      errors: Array<{ row: number; error: string }>;
+    };
+  }> {
+    const errors: Array<{ row: number; error: string }> = [];
+    const stats = {
+      fieldsCreated: 0,
+      fieldsUpdated: 0,
+      productsAffected: new Set<number>(),
+    };
+    let processed = 0;
+
+    try {
+      // Parse CSV
+      const records = parse(fileBuffer.toString(), {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        relax_column_count: true,
+      });
+
+      if (!records || records.length === 0) {
+        throw new BadRequestException('CSV file is empty or invalid');
+      }
+
+      const totalRows = records.length;
+
+      // Validate CSV has required columns
+      const firstRecord = records[0] as Record<string, any>;
+      const requiredColumns = ['destination', 'productName', 'fieldType', 'question'];
+      const missingColumns = requiredColumns.filter(col => !firstRecord.hasOwnProperty(col));
+
+      if (missingColumns.length > 0) {
+        throw new BadRequestException(
+          `Missing required columns: ${missingColumns.join(', ')}. Required columns are: destination, productName, fieldType, question`
+        );
+      }
+
+      // Group fields by visa product for efficient processing
+      const productFieldsMap = new Map<string, Array<{ record: any; row: number }>>();
+
+      for (let i = 0; i < records.length; i++) {
+        const row = i + 2; // +2 because row 1 is header, and we're 0-indexed
+        const record = records[i] as Record<string, any>;
+
+        try {
+          // Validate required fields
+          if (!record.destination || record.destination.trim() === '') {
+            throw new Error('Missing required field: destination');
+          }
+          if (!record.productName || record.productName.trim() === '') {
+            throw new Error('Missing required field: productName');
+          }
+          if (!record.fieldType || record.fieldType.trim() === '') {
+            throw new Error('Missing required field: fieldType');
+          }
+          if (!record.question || record.question.trim() === '') {
+            throw new Error('Missing required field: question');
+          }
+
+          // Validate fieldType
+          const validFieldTypes = ['text', 'number', 'date', 'upload', 'dropdown', 'textarea'];
+          const fieldType = record.fieldType.trim().toLowerCase();
+          if (!validFieldTypes.includes(fieldType)) {
+            throw new Error(`Invalid fieldType: ${fieldType}. Must be one of: ${validFieldTypes.join(', ')}`);
+          }
+
+          // Validate dropdown has options
+          if (fieldType === 'dropdown' && (!record.options || record.options.trim() === '')) {
+            throw new Error('Dropdown fields must have options');
+          }
+
+          // Create product key for grouping
+          const key = `${record.destination.trim()}|||${record.productName.trim()}`;
+
+          if (!productFieldsMap.has(key)) {
+            productFieldsMap.set(key, []);
+          }
+          productFieldsMap.get(key)!.push({ record, row });
+
+        } catch (error) {
+          errors.push({
+            row,
+            error: error.message || 'Unknown error processing row',
+          });
+        }
+      }
+
+      // Process each visa product's fields
+      for (const [key, fieldRecords] of productFieldsMap) {
+        const [destination, productName] = key.split('|||');
+
+        try {
+          // Find the visa product
+          const visaProduct = await this.visaProductRepo.findOne({
+            where: { country: destination, productName },
+          });
+
+          if (!visaProduct) {
+            // Add error for all rows of this product
+            for (const { row } of fieldRecords) {
+              errors.push({
+                row,
+                error: `Visa product not found: "${productName}" for destination "${destination}"`,
+              });
+            }
+            continue;
+          }
+
+          stats.productsAffected.add(visaProduct.id);
+
+          // Initialize maxFieldId if needed
+          await this.initializeMaxFieldId(visaProduct);
+
+          // Get existing fields
+          let fields = visaProduct.fields || [];
+          let maxFieldId = visaProduct.maxFieldId || 0;
+
+          // Process each field record for this product
+          for (const { record, row } of fieldRecords) {
+            try {
+              const fieldData = this.parseFieldFromCsvRecord(record);
+
+              // Check if field with same question already exists
+              const existingFieldIndex = fields.findIndex(
+                (f: any) => f.question?.toLowerCase() === fieldData.question.toLowerCase()
+              );
+
+              if (existingFieldIndex >= 0) {
+                // Update existing field
+                const existingField = fields[existingFieldIndex];
+                Object.assign(existingField, {
+                  ...fieldData,
+                  id: existingField.id, // Preserve ID
+                  updatedAt: new Date(),
+                });
+                stats.fieldsUpdated++;
+              } else {
+                // Create new field
+                maxFieldId++;
+                const newField = {
+                  id: maxFieldId,
+                  ...fieldData,
+                  displayOrder: fieldData.displayOrder ?? fields.length,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                };
+                fields.push(newField);
+                stats.fieldsCreated++;
+              }
+
+              processed++;
+            } catch (error) {
+              errors.push({
+                row,
+                error: error.message || 'Unknown error processing field',
+              });
+            }
+          }
+
+          // Sort fields by displayOrder
+          fields.sort((a: any, b: any) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+
+          // Save updated visa product
+          visaProduct.fields = fields;
+          visaProduct.maxFieldId = maxFieldId;
+          await this.visaProductRepo.save(visaProduct);
+
+        } catch (error) {
+          // Add error for all rows of this product
+          for (const { row } of fieldRecords) {
+            errors.push({
+              row,
+              error: error.message || 'Error processing visa product fields',
+            });
+          }
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        message: errors.length === 0
+          ? `Successfully imported ${processed} fields. Created ${stats.fieldsCreated}, updated ${stats.fieldsUpdated} fields across ${stats.productsAffected.size} products.`
+          : `Imported ${processed} fields with ${errors.length} errors. Created ${stats.fieldsCreated}, updated ${stats.fieldsUpdated} fields across ${stats.productsAffected.size} products.`,
+        summary: {
+          totalRows,
+          processed,
+          fieldsCreated: stats.fieldsCreated,
+          fieldsUpdated: stats.fieldsUpdated,
+          productsAffected: stats.productsAffected.size,
+          errors,
+        },
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(`Error parsing CSV: ${error.message}`);
+    }
+  }
+
+  /**
+   * Parse a single field from a CSV record
+   */
+  private parseFieldFromCsvRecord(record: any): {
+    fieldType: string;
+    question: string;
+    placeholder?: string;
+    isRequired: boolean;
+    displayOrder?: number;
+    options?: string[];
+    allowedFileTypes?: string[];
+    maxFileSizeMB?: number;
+    minLength?: number;
+    maxLength?: number;
+    isActive: boolean;
+  } {
+    const fieldType = record.fieldType.trim().toLowerCase();
+    const question = record.question.trim();
+    const placeholder = record.placeholder?.trim() || undefined;
+    const isRequired = record.isRequired?.toLowerCase() === 'true';
+    const isActive = record.isActive?.toLowerCase() !== 'false'; // Default to true
+
+    // Parse displayOrder
+    let displayOrder: number | undefined;
+    if (record.displayOrder && record.displayOrder.trim() !== '') {
+      displayOrder = parseInt(record.displayOrder, 10);
+      if (isNaN(displayOrder) || displayOrder < 0) {
+        throw new Error(`Invalid displayOrder: ${record.displayOrder}`);
+      }
+    }
+
+    // Parse options for dropdown (pipe-separated)
+    let options: string[] | undefined;
+    if (record.options && record.options.trim() !== '') {
+      options = record.options.split('|').map((o: string) => o.trim()).filter((o: string) => o.length > 0);
+      if (fieldType === 'dropdown' && (!options || options.length === 0)) {
+        throw new Error('Dropdown fields must have at least one option');
+      }
+    }
+
+    // Parse allowedFileTypes for upload (pipe-separated)
+    let allowedFileTypes: string[] | undefined;
+    if (record.allowedFileTypes && record.allowedFileTypes.trim() !== '') {
+      allowedFileTypes = record.allowedFileTypes.split('|').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+    }
+
+    // Parse maxFileSizeMB
+    let maxFileSizeMB: number | undefined;
+    if (record.maxFileSizeMB && record.maxFileSizeMB.trim() !== '') {
+      maxFileSizeMB = parseFloat(record.maxFileSizeMB);
+      if (isNaN(maxFileSizeMB) || maxFileSizeMB <= 0) {
+        throw new Error(`Invalid maxFileSizeMB: ${record.maxFileSizeMB}`);
+      }
+    }
+
+    // Parse minLength
+    let minLength: number | undefined;
+    if (record.minLength && record.minLength.trim() !== '') {
+      minLength = parseInt(record.minLength, 10);
+      if (isNaN(minLength) || minLength < 0) {
+        throw new Error(`Invalid minLength: ${record.minLength}`);
+      }
+    }
+
+    // Parse maxLength
+    let maxLength: number | undefined;
+    if (record.maxLength && record.maxLength.trim() !== '') {
+      maxLength = parseInt(record.maxLength, 10);
+      if (isNaN(maxLength) || maxLength < 0) {
+        throw new Error(`Invalid maxLength: ${record.maxLength}`);
+      }
+    }
+
+    // Validate min/max length relationship
+    if (minLength !== undefined && maxLength !== undefined && minLength > maxLength) {
+      throw new Error(`minLength (${minLength}) cannot be greater than maxLength (${maxLength})`);
+    }
+
+    return {
+      fieldType,
+      question,
+      placeholder,
+      isRequired,
+      displayOrder,
+      options,
+      allowedFileTypes,
+      maxFileSizeMB,
+      minLength,
+      maxLength,
+      isActive,
+    };
   }
 }
