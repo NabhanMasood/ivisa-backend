@@ -275,4 +275,53 @@ export class VisaProductFieldsController {
 
     return this.visaProductFieldsService.batchSaveFields(batchDto);
   }
+
+  /**
+   * Import additional info fields from CSV file
+   * POST /visa-product-fields/import
+   */
+  @Post('import')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit
+      },
+      fileFilter: (req, file, callback) => {
+        if (!file.originalname.match(/\.csv$/i)) {
+          return callback(
+            new BadRequestException('Only CSV files are allowed'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  async importFieldsFromCsv(
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    try {
+      const result = await this.visaProductFieldsService.importFieldsFromCsv(
+        file.buffer,
+      );
+
+      return {
+        status: result.success,
+        message: result.message,
+        data: result.summary,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error.message || 'Error importing CSV file',
+      );
+    }
+  }
 }
