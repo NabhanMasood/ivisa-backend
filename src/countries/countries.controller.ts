@@ -30,7 +30,7 @@ export class CountriesController {
   ) { }
 
   /**
-   * Upload logo endpoint - separate from create/update
+   * Upload logo endpoints - separate from create/update
    * Backend uploads to Cloudinary and returns the URL
    */
   @Post('upload')
