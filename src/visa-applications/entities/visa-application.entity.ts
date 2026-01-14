@@ -33,19 +33,19 @@ export class VisaApplication {
   @Column({ unique: true })
   applicationNumber: string;
 
-  @ManyToOne(() => Customer, { eager: false })
+  @ManyToOne(() => Customer, { eager: false, nullable: true })
   @JoinColumn({ name: 'customerId' })
   customer: Customer;
 
-  @Column()
-  customerId: number;
+  @Column({ nullable: true })
+  customerId: number | null;
 
-  @ManyToOne(() => VisaProduct, { eager: true })
+  @ManyToOne(() => VisaProduct, { eager: true, nullable: true })
   @JoinColumn({ name: 'visaProductId' })
   visaProduct: VisaProduct;
 
-  @Column()
-  visaProductId: number;
+  @Column({ nullable: true })
+  visaProductId: number | null;
 
   @Column()
   nationality: string;
@@ -178,6 +178,32 @@ export class VisaApplication {
 
   @Column({ type: 'int', nullable: true })
   currentStep?: number | null; // Track which step user is on (1-6)
+
+  // Sales Kanban tracking fields
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  salesStatus?: string | null; // 'new_lead' | 'contacted' | 'follow_up' | 'converted' | 'lost'
+
+  @Column({ type: 'timestamp', nullable: true })
+  salesStatusUpdatedAt?: Date | null; // When sales status was last updated
+
+  @Column({ type: 'text', nullable: true })
+  salesNotes?: string | null; // Admin notes for sales tracking
+
+  // Inquiry tracking fields (for visa inquiries when no products available)
+  @Column({ type: 'varchar', length: 20, default: 'application' })
+  sourceType: string; // 'application' | 'inquiry'
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  inquirySubject?: string | null; // Subject field for inquiries
+
+  @Column({ type: 'text', nullable: true })
+  inquiryMessage?: string | null; // Message field for inquiries
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  inquiryName?: string | null; // Full name for inquiries (since no customer account)
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  travellingFrom?: string | null; // Origin country for inquiries
 
   @CreateDateColumn()
   createdAt: Date;

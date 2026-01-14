@@ -61,7 +61,7 @@ export class EmailService {
               <p>Dear ${customerName},</p>
               <p>Thank you for creating your account with Visa123.</p>
               <p style="text-align: center;">
-                <a href="${loginUrl}" class="button">Login to Your Account</a>
+                <a href="${loginUrl}" class="button" style="color: white !important; text-decoration: none;">Login to Your Account</a>
               </p>
               <p>If you have any questions, please contact our support team.</p>
               <div class="contact-info">
@@ -778,7 +778,7 @@ Visa123 Team`,
               </div>
               
               <p style="text-align: center;">
-                <a href="${adminPanelUrl}" class="button">Login to Admin Panel</a>
+                <a href="${adminPanelUrl}" class="button" style="color: white !important; text-decoration: none;">Login to Admin Panel</a>
               </p>
               
               <p><strong>Important:</strong> Please change your password immediately after your first login.</p>
@@ -976,7 +976,7 @@ Visa123 Team`,
               ` : ''}
               
               <p style="text-align: center;">
-                <a href="${applicationUrl}" class="button">Complete Your Application Now</a>
+                <a href="${applicationUrl}" class="button" style="color: white !important; text-decoration: none;">Complete Your Application Now</a>
               </p>
               
               <p>Complete your application in just a few minutes and get one step closer to your travel destination.</p>
@@ -1045,7 +1045,7 @@ Visa123 Team`,
     const msg = {
       to,
       from: fromEmail,
-      subject: 'Last Chance: Special Discount on Your Visa Application!',
+      subject: `Your Visa Application - Gift Code Inside`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -1058,11 +1058,10 @@ Visa123 Team`,
             .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
             .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
             .content { background-color: #f9f9f9; padding: 30px; }
-            .urgent-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
-            .coupon-box { background-color: #4CAF50; padding: 30px; border: 2px solid #4CAF50; margin: 20px 0; text-align: center; }
-            .coupon-box h2 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; }
-            .coupon-code { font-size: 32px; font-weight: bold; color: white; margin: 15px 0; letter-spacing: 2px; }
-            .discount-text { font-size: 18px; color: white; margin: 10px 0; }
+            .info-box { background-color: #e8f5e9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+            .coupon-box { background-color: #4CAF50; padding: 25px; margin: 20px 0; text-align: center; border-radius: 8px; }
+            .coupon-code { font-size: 28px; font-weight: bold; color: white; margin: 10px 0; letter-spacing: 2px; }
+            .discount-text { font-size: 16px; color: white; margin: 10px 0; }
             .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
             .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
@@ -1071,66 +1070,55 @@ Visa123 Team`,
         <body>
           <div class="container">
             <div class="header">
-              <h1>Last Chance - Don't Miss This Offer!</h1>
+              <h1>A Gift From Visa123</h1>
             </div>
             <div class="content">
-              <p>Dear ${customerName},</p>
-              <p>We don't want you to miss out on your travel plans! Complete your visa application now and save with this exclusive discount.</p>
-              
-              <div class="urgent-box">
-                <strong>⏰ Limited Time Offer</strong><br>
-                This special discount is available for a limited time only. Don't wait!
-              </div>
-              
+              <p>Dear ${customerName || 'Valued Customer'},</p>
+              <p>We noticed you started a visa application with us. To help you complete your application, we'd like to offer you a gift code.</p>
+
               <div class="coupon-box">
-                <h2 style="margin-top: 0; color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600;">Your Exclusive Discount Code</h2>
+                <p style="margin: 0 0 10px 0; color: white; font-size: 14px;">Your Gift Code</p>
                 <div class="coupon-code">${couponCode}</div>
                 <div class="discount-text">${couponDiscount}</div>
-                <p style="font-size: 14px; color: white;">Enter this code at checkout to apply your discount</p>
+                <p style="font-size: 13px; color: white; margin: 10px 0 0 0;">Use this code at checkout</p>
               </div>
-              
+
               <p style="text-align: center;">
-                <a href="${applicationUrl}" class="button">Complete Application & Save Now</a>
+                <a href="${applicationUrl}" class="button" style="color: white !important; text-decoration: none;">Continue Your Application</a>
               </p>
-              
-              <p>Your application is just a few steps away from completion. Use your discount code and secure your visa today!</p>
-              
-              <p>If you need any assistance, our support team is ready to help.</p>
-              
+
+              <p>If you have any questions about your application, our team is here to help.</p>
+
               <div class="contact-info">
-                <strong>Need Assistance?</strong><br>
+                <strong>Need Help?</strong><br>
                 Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a><br>
                 New Orders: <a href="mailto:sophie@visa123.co.uk">sophie@visa123.co.uk</a><br>
                 General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a>
               </div>
-              
+
               <p>Best regards,<br>Visa123 Team</p>
             </div>
             <div class="footer">
-              <p>This is an automated email. Please do not reply to this message.</p>
+              <p>&copy; ${new Date().getFullYear()} Visa123. All rights reserved.</p>
             </div>
           </div>
         </body>
         </html>
       `,
-      text: `Dear ${customerName},
+      text: `Dear ${customerName || 'Valued Customer'},
 
-We don't want you to miss out on your travel plans! Complete your visa application now and save with this exclusive discount.
+We noticed you started a visa application with us. To help you complete your application, we'd like to offer you a gift code.
 
-⏰ Limited Time Offer - This special discount is available for a limited time only.
-
-Your Exclusive Discount Code: ${couponCode}
+Your Gift Code: ${couponCode}
 ${couponDiscount}
 
-Enter this code at checkout to apply your discount.
+Use this code at checkout.
 
-Complete your application: ${applicationUrl}
+Continue your application: ${applicationUrl}
 
-Your application is just a few steps away from completion. Use your discount code and secure your visa today!
+If you have any questions about your application, our team is here to help.
 
-If you need any assistance, our support team is ready to help.
-
-Need Assistance?
+Need Help?
 Customer Support: support@visa123.co.uk
 New Orders: sophie@visa123.co.uk
 General Inquiry: opportunity@visa123.co.uk
@@ -1464,7 +1452,7 @@ Visa123 Team`,
               
               ${referralsUrl ? `
               <p style="text-align: center;">
-                <a href="${referralsUrl}" class="button">View All My Referrals</a>
+                <a href="${referralsUrl}" class="button" style="color: white !important; text-decoration: none;">View All My Referrals</a>
               </p>
               ` : ''}
               
@@ -1523,6 +1511,373 @@ Visa123 Team`,
       this.logger.log(`Referral reward email sent to ${to} with coupon ${couponCode}`);
     } catch (error) {
       this.logger.error(`Failed to send referral reward email to ${to}:`, error);
+    }
+  }
+
+  // ========================================
+  // SALES KANBAN EMAIL METHODS
+  // ========================================
+
+  /**
+   * Send a custom email composed by admin from the Sales Kanban
+   */
+  async sendCustomSalesEmail(
+    to: string,
+    customerName: string,
+    subject: string,
+    body: string,
+    applicationNumber: string,
+    trackingUrl: string,
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL');
+
+    if (!fromEmail) {
+      this.logger.error('SENDGRID_FROM_EMAIL not configured');
+      return;
+    }
+
+    const msg = {
+      to,
+      from: fromEmail,
+      subject,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
+            .content { background-color: #f9f9f9; padding: 30px; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
+            .app-number { background-color: #e8f5e9; padding: 10px; border-radius: 5px; margin: 15px 0; text-align: center; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Visa123</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${customerName || 'Valued Customer'},</p>
+
+              <div class="app-number">
+                <strong>Application Reference:</strong> ${applicationNumber}
+              </div>
+
+              <div style="white-space: pre-wrap;">${body}</div>
+
+              ${trackingUrl ? `
+              <p style="text-align: center; margin-top: 30px;">
+                <a href="${trackingUrl}" class="button" style="color: white !important; text-decoration: none;">Continue Your Application</a>
+              </p>
+              ` : ''}
+
+              <div class="contact-info">
+                <strong>Need Help?</strong><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a><br>
+                New Orders: <a href="mailto:sophie@visa123.co.uk">sophie@visa123.co.uk</a><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
+              </div>
+
+              <p>Best regards,<br>Visa123 Team</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} Visa123. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `Dear ${customerName || 'Valued Customer'},
+
+Application Reference: ${applicationNumber}
+
+${body}
+
+${trackingUrl ? `Continue your application: ${trackingUrl}
+
+` : ''}Need Help?
+General Inquiry: opportunity@visa123.co.uk
+New Orders: sophie@visa123.co.uk
+Customer Support: support@visa123.co.uk
+
+Best regards,
+Visa123 Team`,
+    };
+
+    try {
+      await sgMail.send(msg);
+      this.logger.log(`Custom sales email sent to ${to} for application ${applicationNumber}`);
+    } catch (error) {
+      this.logger.error(`Failed to send custom sales email to ${to}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send a "Need Help?" offer email from Sales Kanban
+   */
+  async sendHelpOfferEmail(
+    to: string,
+    customerName: string,
+    applicationNumber: string,
+    destinationCountry: string,
+    visaType: string,
+    trackingUrl: string,
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL');
+
+    if (!fromEmail) {
+      this.logger.error('SENDGRID_FROM_EMAIL not configured');
+      return;
+    }
+
+    const msg = {
+      to,
+      from: fromEmail,
+      subject: `Need Help with Your ${destinationCountry} Visa Application?`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
+            .content { background-color: #f9f9f9; padding: 30px; }
+            .button { display: inline-block; padding: 12px 30px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .button-secondary { display: inline-block; padding: 10px 25px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px; margin: 10px 5px; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
+            .app-details { background-color: #e3f2fd; padding: 15px; border-radius: 5px; margin: 15px 0; }
+            .help-box { background-color: #fff3e0; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ff9800; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>We're Here to Help!</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${customerName || 'Valued Customer'},</p>
+
+              <p>We noticed you started a visa application but haven't completed it yet. We're here to help you every step of the way!</p>
+
+              <div class="app-details">
+                <strong>Your Application Details:</strong><br>
+                Reference: ${applicationNumber}<br>
+                Destination: ${destinationCountry}<br>
+                Visa Type: ${visaType}
+              </div>
+
+              <div class="help-box">
+                <h3 style="margin-top: 0; color: #e65100;">How Can We Help?</h3>
+                <p>If you're facing any challenges or have questions about:</p>
+                <ul style="margin-bottom: 0;">
+                  <li>Required documents</li>
+                  <li>Processing times</li>
+                  <li>Application requirements</li>
+                  <li>Payment options</li>
+                </ul>
+              </div>
+
+              <p>Our team is ready to assist you. Simply reply to this email or contact us directly!</p>
+
+              <p style="text-align: center;">
+                <a href="${trackingUrl}" class="button" style="color: white !important; text-decoration: none;">Complete Your Application</a>
+              </p>
+
+              <p style="text-align: center;">
+                <a href="mailto:support@visa123.co.uk" class="button-secondary">Email Support</a>
+              </p>
+
+              <div class="contact-info">
+                <strong>Contact Us:</strong><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a><br>
+                New Orders: <a href="mailto:sophie@visa123.co.uk">sophie@visa123.co.uk</a><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
+              </div>
+
+              <p>Best regards,<br>Visa123 Team</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} Visa123. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `Dear ${customerName || 'Valued Customer'},
+
+We noticed you started a visa application but haven't completed it yet. We're here to help you every step of the way!
+
+Your Application Details:
+Reference: ${applicationNumber}
+Destination: ${destinationCountry}
+Visa Type: ${visaType}
+
+How Can We Help?
+If you're facing any challenges or have questions about:
+- Required documents
+- Processing times
+- Application requirements
+- Payment options
+
+Our team is ready to assist you. Simply reply to this email or contact us directly!
+
+Complete your application: ${trackingUrl}
+
+Contact Us:
+General Inquiry: opportunity@visa123.co.uk
+New Orders: sophie@visa123.co.uk
+Customer Support: support@visa123.co.uk
+
+Best regards,
+Visa123 Team`,
+    };
+
+    try {
+      await sgMail.send(msg);
+      this.logger.log(`Help offer email sent to ${to} for application ${applicationNumber}`);
+    } catch (error) {
+      this.logger.error(`Failed to send help offer email to ${to}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send a response email for visa inquiries (no application to complete)
+   * Used when admin responds to inquiry submissions from the Sales Kanban
+   */
+  async sendInquiryResponseEmail(
+    to: string,
+    customerName: string,
+    applicationNumber: string,
+    nationality: string,
+    destinationCountry: string,
+    travellingFrom: string,
+    inquirySubject?: string,
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL');
+
+    if (!fromEmail) {
+      this.logger.error('SENDGRID_FROM_EMAIL not configured');
+      return;
+    }
+
+    const msg = {
+      to,
+      from: fromEmail,
+      subject: `Re: Your Visa Inquiry - ${destinationCountry} Visa`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .header h1 { color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; margin: 0; font-size: 24px; }
+            .content { background-color: #f9f9f9; padding: 30px; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+            .contact-info { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px; }
+            .inquiry-details { background-color: #e3f2fd; padding: 15px; border-radius: 5px; margin: 15px 0; }
+            .response-box { background-color: #e8f5e9; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Thank You for Your Inquiry!</h1>
+            </div>
+            <div class="content">
+              <p>Dear ${customerName || 'Valued Customer'},</p>
+
+              <p>Thank you for reaching out to us about your visa inquiry. We have received your request and our team is reviewing it.</p>
+
+              <div class="inquiry-details">
+                <strong>Your Inquiry Details:</strong><br>
+                Reference: ${applicationNumber}<br>
+                ${inquirySubject ? `Subject: ${inquirySubject}<br>` : ''}
+                Nationality: ${nationality}<br>
+                Travelling From: ${travellingFrom}<br>
+                Destination: ${destinationCountry}
+              </div>
+
+              <div class="response-box">
+                <h3 style="margin-top: 0; color: #2e7d32;">What Happens Next?</h3>
+                <p>Our visa specialists will review your inquiry and get back to you shortly with:</p>
+                <ul style="margin-bottom: 0;">
+                  <li>Visa availability for your route</li>
+                  <li>Required documents</li>
+                  <li>Processing times and fees</li>
+                  <li>Any additional information you may need</li>
+                </ul>
+              </div>
+
+              <p>We typically respond within 24-48 business hours. If you have any urgent questions, please don't hesitate to contact us directly.</p>
+
+              <div class="contact-info">
+                <strong>Contact Us:</strong><br>
+                General Inquiry: <a href="mailto:opportunity@visa123.co.uk">opportunity@visa123.co.uk</a><br>
+                New Orders: <a href="mailto:sophie@visa123.co.uk">sophie@visa123.co.uk</a><br>
+                Customer Support: <a href="mailto:support@visa123.co.uk">support@visa123.co.uk</a>
+              </div>
+
+              <p>Best regards,<br>Visa123 Team</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} Visa123. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `Dear ${customerName || 'Valued Customer'},
+
+Thank you for reaching out to us about your visa inquiry. We have received your request and our team is reviewing it.
+
+Your Inquiry Details:
+Reference: ${applicationNumber}
+${inquirySubject ? `Subject: ${inquirySubject}\n` : ''}Nationality: ${nationality}
+Travelling From: ${travellingFrom}
+Destination: ${destinationCountry}
+
+What Happens Next?
+Our visa specialists will review your inquiry and get back to you shortly with:
+- Visa availability for your route
+- Required documents
+- Processing times and fees
+- Any additional information you may need
+
+We typically respond within 24-48 business hours. If you have any urgent questions, please don't hesitate to contact us directly.
+
+Contact Us:
+General Inquiry: opportunity@visa123.co.uk
+New Orders: sophie@visa123.co.uk
+Customer Support: support@visa123.co.uk
+
+Best regards,
+Visa123 Team`,
+    };
+
+    try {
+      await sgMail.send(msg);
+      this.logger.log(`Inquiry response email sent to ${to} for inquiry ${applicationNumber}`);
+    } catch (error) {
+      this.logger.error(`Failed to send inquiry response email to ${to}:`, error);
+      throw error;
     }
   }
 }

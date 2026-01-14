@@ -39,7 +39,7 @@ export class Payment {
   customer: Customer;
 
   @Column({ nullable: true })
-  customerId: number;
+  customerId: number | null;
 
   // Payment Amount
   @Column('decimal', { precision: 10, scale: 2 })

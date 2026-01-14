@@ -69,7 +69,7 @@ import {
         // Create payment record
         const payment = this.paymentRepo.create({
           applicationId: intentDto.applicationId,
-          customerId: application.customerId, // Link to customer
+          customerId: application.customerId ?? undefined, // Link to customer (convert null to undefined for TypeORM)
           amount: intentDto.amount || application.totalAmount,
           currency: intentDto.currency || 'USD',
           paymentMethod: intentDto.paymentMethod || 'card',
@@ -178,7 +178,15 @@ import {
         }
   
         const result = await this.paymentRepo.save(payment);
-  
+
+        // Auto-convert to "converted" status if application was tracked in Sales Kanban
+        // (had email captured or had any sales interaction)
+        if (application.emailCaptured || application.pendingReminderSentAt || application.couponEmailSentAt || application.salesStatus) {
+          application.salesStatus = 'converted';
+          application.salesStatusUpdatedAt = new Date();
+          await this.applicationRepo.save(application);
+        }
+
         return {
           status: true,
           message: 'Payment confirmed successfully',
@@ -234,7 +242,7 @@ import {
         // Create payment
         const payment = this.paymentRepo.create({
           applicationId: createDto.applicationId,
-          customerId: application.customerId, // Link to customer
+          customerId: application.customerId ?? undefined, // Link to customer (convert null to undefined for TypeORM)
           amount: createDto.amount,
           currency: createDto.currency || 'USD',
           paymentMethod: createDto.paymentMethod,
