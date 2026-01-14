@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Customer } from '../customers/entities/customer.entity';
 import { VisaProduct } from '../visa-product/entities/visa-product.entity';
+import { VisaProductField } from '../visa-product/entities/visa-product-field.entity';
 import { Traveler } from '../travelers/entities/traveler.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { Embassy } from '../embassies/entities/embassy.entity';
@@ -36,6 +37,8 @@ export class VisaApplicationsService {
     private travelerRepo: Repository<Traveler>,
     @InjectRepository(Embassy)
     private embassyRepo: Repository<Embassy>,
+    @InjectRepository(VisaProductField)
+    private visaProductFieldRepo: Repository<VisaProductField>,
     private couponsService: CouponsService,
     private cardInfoService: CardInfoService,
     private emailService: EmailService,
@@ -3207,6 +3210,108 @@ export class VisaApplicationsService {
       status: true,
       message: 'Resubmission requests retrieved successfully',
       data: enrichedRequests,
+    };
+  }
+
+  /**
+   * Get all data needed for admin modal in one call
+   * Combines: field definitions, resubmission requests (enriched), admin fields
+   */
+  async getAdminModalData(applicationId: number) {
+    const application = await this.applicationRepo.findOne({
+      where: { id: applicationId },
+      relations: ['visaProduct', 'travelers'],
+    });
+
+    if (!application) {
+      throw new NotFoundException(
+        `Application with ID ${applicationId} not found`,
+      );
+    }
+
+    // 1. Get field definitions from visa product
+    let fieldDefinitions: any[] = [];
+    if (application.visaProduct?.id) {
+      const fields = await this.visaProductFieldRepo.find({
+        where: { visaProductId: application.visaProduct.id, isActive: true },
+        order: { displayOrder: 'ASC' },
+      });
+      fieldDefinitions = fields.map((f) => ({
+        id: f.id,
+        question: f.question,
+        fieldType: f.fieldType,
+        placeholder: f.placeholder,
+        isRequired: f.isRequired,
+        options: f.options,
+        allowedFileTypes: f.allowedFileTypes,
+        maxFileSizeMB: f.maxFileSizeMB,
+        minLength: f.minLength,
+        maxLength: f.maxLength,
+        displayOrder: f.displayOrder,
+        isActive: f.isActive,
+      }));
+    }
+
+    // 2. Get admin-created fields
+    const adminRequestedFields = application.adminRequestedFields || [];
+
+    // 3. Get all resubmission requests (active + fulfilled) with enrichment
+    const allRequests = application.resubmissionRequests || [];
+
+    // Build admin fields map for quick lookup
+    const adminFieldsMap = new Map<number, any>();
+    adminRequestedFields.forEach((field: any) => {
+      adminFieldsMap.set(field.id, field);
+    });
+
+    // Enrich requests with field definitions
+    const enrichedRequests = allRequests.map((req: any) => {
+      const newFields = (req.fieldIds || [])
+        .filter((fieldId: number) => fieldId < 0) // Only negative IDs are admin fields
+        .map((fieldId: number) => {
+          const fieldDef = adminFieldsMap.get(fieldId);
+          if (fieldDef) {
+            return {
+              id: fieldDef.id,
+              question: fieldDef.question,
+              fieldType: fieldDef.fieldType,
+              placeholder: fieldDef.placeholder,
+              isRequired: fieldDef.isRequired,
+              options: fieldDef.options,
+              allowedFileTypes: fieldDef.allowedFileTypes,
+              maxFileSizeMB: fieldDef.maxFileSizeMB,
+              minLength: fieldDef.minLength,
+              maxLength: fieldDef.maxLength,
+            };
+          }
+          return null;
+        })
+        .filter((f: any) => f !== null);
+
+      return {
+        ...req,
+        newFields: newFields.length > 0 ? newFields : undefined,
+      };
+    });
+
+    // 4. Get travelers with basic info
+    const travelers = (application.travelers || []).map((t: any) => ({
+      id: t.id,
+      firstName: t.firstName,
+      lastName: t.lastName,
+      email: t.email,
+    }));
+
+    return {
+      status: true,
+      message: 'Admin modal data retrieved successfully',
+      data: {
+        fieldDefinitions,
+        resubmissionRequests: enrichedRequests,
+        adminRequestedFields,
+        travelers,
+        visaProductId: application.visaProduct?.id,
+      },
     };
   }
 

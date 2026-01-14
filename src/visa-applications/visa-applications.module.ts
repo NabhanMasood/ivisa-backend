@@ -6,6 +6,8 @@ import { VisaApplicationsScheduler } from './visa-applications.scheduler';
 import { VisaApplication } from './entities/visa-application.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { VisaProduct } from '../visa-product/entities/visa-product.entity';
+import { VisaProductField } from '../visa-product/entities/visa-product-field.entity';
+import { VisaApplicationFieldResponse } from '../visa-product/entities/visa-application-field-response.entity';
 import { Traveler } from '../travelers/entities/traveler.entity';
 import { Embassy } from '../embassies/entities/embassy.entity';
 import { CouponsModule } from '../coupons/coupons.module';
@@ -15,7 +17,7 @@ import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([VisaApplication, Customer, VisaProduct, Traveler, Embassy]),
+    TypeOrmModule.forFeature([VisaApplication, Customer, VisaProduct, VisaProductField, VisaApplicationFieldResponse, Traveler, Embassy]),
     CouponsModule, // Import to use CouponsService
     CardInfoModule, // Import to use CardInfoService
     EmailModule, // Import to use EmailService

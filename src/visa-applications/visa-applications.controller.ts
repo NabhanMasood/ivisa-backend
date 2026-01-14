@@ -245,6 +245,26 @@ export class VisaApplicationsController {
       });
     }
   }
+
+  /**
+   * GET /visa-applications/:id/admin-modal-data
+   * Consolidated endpoint for admin modal - returns all data needed in one call:
+   * - Field definitions from visa product
+   * - All resubmission requests (active + fulfilled, enriched with field definitions)
+   * - Admin-created fields
+   */
+  @Get(':id/admin-modal-data')
+  async getAdminModalData(@Param('id', ParseIntPipe) id: number) {
+    try {
+      return await this.visaApplicationsService.getAdminModalData(id);
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to fetch admin modal data',
+      });
+    }
+  }
+
   /**
    * POST /visa-applications/:id/admin-fields
    * Add admin-only custom fields for this application (optionally targeted to a traveler)
