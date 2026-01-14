@@ -16,6 +16,8 @@ import { UpdateVisaApplicationDto } from './dto/update-visa-application.dto';
 import { SelectProcessingDto } from './dto/select-processing.dto';
 import { SubmitApplicationDto } from './dto/submit-application.dto';
 import { SubmitCompleteApplicationDto } from './dto/submit-complete-application.dto';
+import { SalesKanbanQueryDto, UpdateSalesStatusDto } from './dto/sales-kanban.dto';
+import { CreateInquiryDto } from './dto/create-inquiry.dto';
 import { CouponsService } from '../coupons/coupons.service';
 import { CardInfoService } from '../card-info/card-info.service';
 import { CardInfo } from '../card-info/entities/card-info.entity';
@@ -2593,7 +2595,7 @@ export class VisaApplicationsService {
 
       const payment = {
         applicationId: savedApplication.id,
-        customerId: savedApplication.customerId, // Link to customer
+        customerId: savedApplication.customerId ?? undefined, // Link to customer (convert null to undefined for TypeORM)
         amount: paymentAmount, // Use payment.amount if provided, otherwise totalAmount
         currency: 'USD',
         paymentMethod: 'card',
@@ -3516,6 +3518,612 @@ export class VisaApplicationsService {
         throw error;
       }
       throw new BadRequestException(error.message || 'Error removing admin fields');
+    }
+  }
+
+  // ========================================
+  // SALES KANBAN METHODS
+  // ========================================
+
+  /**
+   * Determine sales status based on application state
+   * Used for initial categorization of draft applications
+   */
+  private determineSalesStatus(app: VisaApplication): string {
+    // If already has a sales status set by admin, use it
+    if (app.salesStatus) {
+      return app.salesStatus;
+    }
+
+    // If application was submitted, it's converted
+    if (app.status !== 'draft' && app.submittedAt) {
+      return 'converted';
+    }
+
+    // If coupon email was sent, it's in follow-up stage
+    if (app.couponEmailSentAt) {
+      return 'follow_up';
+    }
+
+    // If first reminder was sent, it's been contacted
+    if (app.pendingReminderSentAt) {
+      return 'contacted';
+    }
+
+    // Default: new lead
+    return 'new_lead';
+  }
+
+  /**
+   * Get all draft applications for the Sales Kanban board
+   * Supports filtering by various criteria
+   */
+  async getSalesKanbanApplications(query: SalesKanbanQueryDto) {
+    try {
+      const qb = this.applicationRepo
+        .createQueryBuilder('app')
+        .leftJoinAndSelect('app.customer', 'customer')
+        .leftJoinAndSelect('app.visaProduct', 'visaProduct')
+        // Include draft applications with email OR converted applications (so they stay in kanban after payment)
+        .where(
+          '((app.status = :status AND app.emailCaptured IS NOT NULL) OR app.salesStatus = :convertedStatus)',
+          { status: 'draft', convertedStatus: 'converted' },
+        );
+
+      // Search filter (email, name, application number)
+      if (query.search) {
+        qb.andWhere(
+          '(app.applicationNumber ILIKE :search OR app.emailCaptured ILIKE :search OR customer.fullname ILIKE :search OR customer.email ILIKE :search)',
+          { search: `%${query.search}%` },
+        );
+      }
+
+      // Destination filter
+      if (query.destination) {
+        qb.andWhere('app.destinationCountry ILIKE :destination', {
+          destination: `%${query.destination}%`,
+        });
+      }
+
+      // Visa type filter
+      if (query.visaType) {
+        qb.andWhere('app.visaType ILIKE :visaType', {
+          visaType: `%${query.visaType}%`,
+        });
+      }
+
+      // Date range filters
+      if (query.dateFrom) {
+        qb.andWhere('app.createdAt >= :dateFrom', {
+          dateFrom: new Date(query.dateFrom),
+        });
+      }
+
+      if (query.dateTo) {
+        const endDate = new Date(query.dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        qb.andWhere('app.createdAt <= :dateTo', { dateTo: endDate });
+      }
+
+      // Reminder sent filter
+      if (query.reminderSent !== undefined) {
+        if (query.reminderSent) {
+          qb.andWhere('app.pendingReminderSentAt IS NOT NULL');
+        } else {
+          qb.andWhere('app.pendingReminderSentAt IS NULL');
+        }
+      }
+
+      // Coupon sent filter
+      if (query.couponSent !== undefined) {
+        if (query.couponSent) {
+          qb.andWhere('app.couponEmailSentAt IS NOT NULL');
+        } else {
+          qb.andWhere('app.couponEmailSentAt IS NULL');
+        }
+      }
+
+      // Amount range filters
+      if (query.minAmount !== undefined) {
+        qb.andWhere('app.totalAmount >= :minAmount', {
+          minAmount: query.minAmount,
+        });
+      }
+
+      if (query.maxAmount !== undefined) {
+        qb.andWhere('app.totalAmount <= :maxAmount', {
+          maxAmount: query.maxAmount,
+        });
+      }
+
+      // Sales status filter
+      if (query.salesStatus) {
+        qb.andWhere('app.salesStatus = :salesStatus', {
+          salesStatus: query.salesStatus,
+        });
+      }
+
+      // Order by most recent first
+      qb.orderBy('app.createdAt', 'DESC');
+
+      const applications = await qb.getMany();
+
+      // Format applications for sales kanban
+      const formattedApplications = applications.map((app) => ({
+        id: app.id,
+        applicationNumber: app.applicationNumber,
+        email: app.emailCaptured || app.customer?.email || '',
+        customerName: app.inquiryName || app.customer?.fullname || '',
+        customerId: app.customerId,
+        phoneNumber: app.phoneNumber || app.customer?.phoneNumber || null,
+        nationality: app.nationality,
+        destinationCountry: app.destinationCountry,
+        visaType: app.visaType,
+        visaProductName: app.visaProduct?.productName || '',
+        numberOfTravelers: app.numberOfTravelers,
+        totalAmount: parseFloat(app.totalAmount?.toString() || '0'),
+        currentStep: app.currentStep || app.draftData?.currentStep || 1,
+        draftData: app.draftData,
+        status: app.status,
+        salesStatus: this.determineSalesStatus(app),
+        salesNotes: app.salesNotes || null,
+        salesStatusUpdatedAt: app.salesStatusUpdatedAt || null,
+        emailCapturedAt: app.emailCapturedAt,
+        pendingReminderSentAt: app.pendingReminderSentAt,
+        couponEmailSentAt: app.couponEmailSentAt,
+        createdAt: app.createdAt,
+        updatedAt: app.updatedAt,
+        // Inquiry specific fields
+        sourceType: app.sourceType || 'application',
+        inquirySubject: app.inquirySubject || null,
+        inquiryMessage: app.inquiryMessage || null,
+        inquiryName: app.inquiryName || null,
+        travellingFrom: app.travellingFrom || null,
+        // Calculate time since abandonment
+        abandonedDaysAgo: Math.floor(
+          (Date.now() - new Date(app.emailCapturedAt || app.createdAt).getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      }));
+
+      return {
+        status: true,
+        message: 'Sales kanban applications retrieved successfully',
+        count: formattedApplications.length,
+        data: formattedApplications,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error.message || 'Error fetching sales kanban applications',
+      );
+    }
+  }
+
+  /**
+   * Get statistics for the Sales Kanban board
+   * Returns counts for each sales status column
+   */
+  async getSalesKanbanStats() {
+    try {
+      // Get all draft applications with email captured OR converted applications
+      const applications = await this.applicationRepo
+        .createQueryBuilder('app')
+        .select([
+          'app.id',
+          'app.salesStatus',
+          'app.pendingReminderSentAt',
+          'app.couponEmailSentAt',
+          'app.submittedAt',
+          'app.status',
+        ])
+        .where(
+          '((app.status = :status AND app.emailCaptured IS NOT NULL) OR app.salesStatus = :convertedStatus)',
+          { status: 'draft', convertedStatus: 'converted' },
+        )
+        .getMany();
+
+      // Count by determined sales status
+      const stats = {
+        new_lead: 0,
+        contacted: 0,
+        follow_up: 0,
+        converted: 0,
+        lost: 0,
+        total: applications.length,
+      };
+
+      applications.forEach((app) => {
+        const salesStatus = this.determineSalesStatus(app);
+        if (salesStatus in stats) {
+          stats[salesStatus as keyof typeof stats]++;
+        }
+      });
+
+      return {
+        status: true,
+        message: 'Sales kanban stats retrieved successfully',
+        data: stats,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error.message || 'Error fetching sales kanban stats',
+      );
+    }
+  }
+
+  /**
+   * Create a visa inquiry (when no visa products are available)
+   * This creates a special visa application with sourceType='inquiry'
+   */
+  async createInquiry(dto: CreateInquiryDto) {
+    try {
+      // Generate a unique application number for the inquiry
+      const applicationNumber = await this.generateApplicationNumber();
+
+      // Create the inquiry as a special visa application (no customer or product needed)
+      const inquiry = this.applicationRepo.create({
+        applicationNumber,
+        customerId: null, // No customer for inquiries
+        visaProductId: null, // No visa product for inquiries
+        nationality: dto.nationality,
+        destinationCountry: dto.destinationCountry,
+        visaType: 'inquiry', // Special visa type for inquiries
+        numberOfTravelers: 1,
+        governmentFee: 0,
+        serviceFee: 0,
+        totalAmount: 0,
+        phoneNumber: dto.phone || '',
+        status: 'draft',
+        sourceType: 'inquiry',
+        inquirySubject: dto.subject,
+        inquiryMessage: dto.message,
+        inquiryName: dto.name,
+        travellingFrom: dto.travellingFrom,
+        emailCaptured: dto.email,
+        emailCapturedAt: new Date(),
+        salesStatus: 'new_lead',
+        currentStep: 1,
+      });
+
+      const savedInquiry = await this.applicationRepo.save(inquiry) as VisaApplication;
+
+      return {
+        status: true,
+        message: 'Inquiry submitted successfully. Our team will contact you soon.',
+        data: {
+          id: savedInquiry.id,
+          applicationNumber: savedInquiry.applicationNumber,
+          email: dto.email,
+          name: dto.name,
+        },
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error.message || 'Error creating visa inquiry',
+      );
+    }
+  }
+
+  /**
+   * Update the sales status of an application (for drag-drop in kanban)
+   */
+  async updateSalesStatus(id: number, dto: UpdateSalesStatusDto) {
+    try {
+      const application = await this.applicationRepo.findOne({
+        where: { id },
+        relations: ['customer'],
+      });
+
+      if (!application) {
+        throw new NotFoundException(`Visa application with ID ${id} not found`);
+      }
+
+      // Update sales status
+      application.salesStatus = dto.salesStatus;
+      application.salesStatusUpdatedAt = new Date();
+
+      // Update notes if provided
+      if (dto.salesNotes !== undefined) {
+        application.salesNotes = dto.salesNotes;
+      }
+
+      await this.applicationRepo.save(application);
+
+      return {
+        status: true,
+        message: `Application moved to ${dto.salesStatus.replace('_', ' ')}`,
+        data: {
+          id: application.id,
+          applicationNumber: application.applicationNumber,
+          salesStatus: application.salesStatus,
+          salesNotes: application.salesNotes,
+          salesStatusUpdatedAt: application.salesStatusUpdatedAt,
+        },
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error.message || 'Error updating sales status',
+      );
+    }
+  }
+
+  /**
+   * Get unique destination countries for sales kanban filter dropdown
+   */
+  async getSalesKanbanDestinations() {
+    try {
+      const destinations = await this.applicationRepo
+        .createQueryBuilder('app')
+        .select('DISTINCT app.destinationCountry', 'destination')
+        .where('app.status = :status', { status: 'draft' })
+        .andWhere('app.emailCaptured IS NOT NULL')
+        .andWhere('app.destinationCountry IS NOT NULL')
+        .orderBy('app.destinationCountry', 'ASC')
+        .getRawMany();
+
+      return {
+        status: true,
+        data: destinations.map((d) => d.destination).filter(Boolean),
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error.message || 'Error fetching destinations',
+      );
+    }
+  }
+
+  /**
+   * Get unique visa types for sales kanban filter dropdown
+   */
+  async getSalesKanbanVisaTypes() {
+    try {
+      const visaTypes = await this.applicationRepo
+        .createQueryBuilder('app')
+        .select('DISTINCT app.visaType', 'visaType')
+        .where('app.status = :status', { status: 'draft' })
+        .andWhere('app.emailCaptured IS NOT NULL')
+        .andWhere('app.visaType IS NOT NULL')
+        .orderBy('app.visaType', 'ASC')
+        .getRawMany();
+
+      return {
+        status: true,
+        data: visaTypes.map((v) => v.visaType).filter(Boolean),
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error.message || 'Error fetching visa types',
+      );
+    }
+  }
+
+  /**
+   * Send a custom email to an application's customer
+   */
+  async sendSalesCustomEmail(
+    applicationId: number,
+    subject: string,
+    body: string,
+  ) {
+    try {
+      const application = await this.applicationRepo.findOne({
+        where: { id: applicationId },
+        relations: ['customer'],
+      });
+
+      if (!application) {
+        throw new NotFoundException(
+          `Visa application with ID ${applicationId} not found`,
+        );
+      }
+
+      const email = application.emailCaptured || application.customer?.email;
+      if (!email) {
+        throw new BadRequestException(
+          'No email address found for this application',
+        );
+      }
+
+      const customerName = application.sourceType === 'inquiry'
+        ? (application.inquiryName || '')
+        : (application.customer?.fullname || '');
+
+      // Don't include tracking URL for inquiries (no application to continue)
+      // Use draftId param so frontend can load saved step data and resume at correct step
+      const trackingUrl = application.sourceType === 'inquiry'
+        ? ''
+        : `${this.getFrontendUrl()}/visa-application?draftId=${application.id}`;
+
+      await this.emailService.sendCustomSalesEmail(
+        email,
+        customerName,
+        subject,
+        body,
+        application.applicationNumber,
+        trackingUrl,
+      );
+
+      // Update sales status to contacted if it was new_lead
+      if (!application.salesStatus || application.salesStatus === 'new_lead') {
+        application.salesStatus = 'contacted';
+        application.salesStatusUpdatedAt = new Date();
+        await this.applicationRepo.save(application);
+      }
+
+      return {
+        status: true,
+        message: 'Email sent successfully',
+        data: {
+          sentTo: email,
+          applicationNumber: application.applicationNumber,
+          salesStatus: application.salesStatus,
+        },
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error.message || 'Error sending custom email',
+      );
+    }
+  }
+
+  /**
+   * Generate a unique one-time use gift coupon
+   * Returns the created coupon with code and discount value
+   */
+  private async generateGiftCoupon(applicationNumber: string): Promise<{ code: string; value: number }> {
+    // Generate a unique random code
+    const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const code = `GIFT-${randomPart}`;
+
+    // Set validity to 30 days from now
+    const validityDate = new Date();
+    validityDate.setDate(validityDate.getDate() + 30);
+    const validity = validityDate.toISOString().split('T')[0];
+
+    // Default discount value (10%)
+    const discountValue = 10;
+
+    // Create the coupon using the coupons service
+    const coupon = await this.couponsService.create({
+      code,
+      type: 'percent',
+      value: discountValue,
+      validity,
+      usageLimit: 1, // One-time use
+      status: 'enable',
+    });
+
+    return {
+      code: coupon.code,
+      value: discountValue,
+    };
+  }
+
+  /**
+   * Send a template email to an application's customer
+   */
+  async sendSalesTemplateEmail(
+    applicationId: number,
+    templateType: string,
+    couponCode?: string,
+  ) {
+    try {
+      const application = await this.applicationRepo.findOne({
+        where: { id: applicationId },
+        relations: ['customer'],
+      });
+
+      if (!application) {
+        throw new NotFoundException(
+          `Visa application with ID ${applicationId} not found`,
+        );
+      }
+
+      const email = application.emailCaptured || application.customer?.email;
+      if (!email) {
+        throw new BadRequestException(
+          'No email address found for this application',
+        );
+      }
+
+      const customerName = application.customer?.fullname || '';
+      // Use draftId param so frontend can load saved step data and resume at correct step
+      const trackingUrl = `${this.getFrontendUrl()}/visa-application?draftId=${application.id}`;
+
+      switch (templateType) {
+        case 'reminder':
+          await this.emailService.sendPendingApplicationReminderEmail(
+            email,
+            customerName,
+            trackingUrl,
+            couponCode,
+            undefined, // No discount text for simple reminder
+          );
+          // Update reminder sent timestamp
+          application.pendingReminderSentAt = new Date();
+          break;
+
+        case 'coupon':
+          // Auto-generate a unique one-time use coupon
+          const generatedCoupon = await this.generateGiftCoupon(application.applicationNumber);
+          const couponDiscount = `${generatedCoupon.value}% off`;
+
+          await this.emailService.sendAbandonedApplicationCouponEmail(
+            email,
+            customerName,
+            trackingUrl,
+            generatedCoupon.code,
+            couponDiscount,
+          );
+          // Update coupon sent timestamp
+          application.couponEmailSentAt = new Date();
+          break;
+
+        case 'help_offer':
+          // Use different template for inquiries vs regular applications
+          if (application.sourceType === 'inquiry') {
+            await this.emailService.sendInquiryResponseEmail(
+              email,
+              customerName,
+              application.applicationNumber,
+              application.nationality,
+              application.destinationCountry,
+              application.travellingFrom || application.nationality,
+              application.inquirySubject ?? undefined,
+            );
+          } else {
+            await this.emailService.sendHelpOfferEmail(
+              email,
+              customerName,
+              application.applicationNumber,
+              application.destinationCountry,
+              application.visaType,
+              trackingUrl,
+            );
+          }
+          break;
+
+        default:
+          throw new BadRequestException(`Unknown template type: ${templateType}`);
+      }
+
+      // Update sales status to contacted if it was new_lead
+      if (!application.salesStatus || application.salesStatus === 'new_lead') {
+        application.salesStatus = 'contacted';
+        application.salesStatusUpdatedAt = new Date();
+      }
+
+      await this.applicationRepo.save(application);
+
+      return {
+        status: true,
+        message: `${templateType} email sent successfully`,
+        data: {
+          sentTo: email,
+          applicationNumber: application.applicationNumber,
+          templateType,
+          salesStatus: application.salesStatus,
+        },
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error.message || 'Error sending template email',
+      );
     }
   }
 }

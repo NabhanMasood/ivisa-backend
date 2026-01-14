@@ -43,6 +43,13 @@ export class CouponsService {
     return coupon;
   }
 
+  /**
+   * Find a coupon by its code (returns null if not found, doesn't throw)
+   */
+  async findByCode(code: string): Promise<Coupon | null> {
+    return await this.couponRepository.findOne({ where: { code } });
+  }
+
   async validate(validateDto: ValidateCouponDto): Promise<Coupon> {
     const coupon = await this.couponRepository.findOne({
       where: { code: validateDto.code },

@@ -18,6 +18,8 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { SelectProcessingDto } from './dto/select-processing.dto';
 import { SubmitApplicationDto } from './dto/submit-application.dto';
 import { SubmitCompleteApplicationDto } from './dto/submit-complete-application.dto';
+import { SalesKanbanQueryDto, UpdateSalesStatusDto, SendCustomEmailDto, SendTemplateEmailDto } from './dto/sales-kanban.dto';
+import { CreateInquiryDto } from './dto/create-inquiry.dto';
 
 
 @Controller('visa-applications')
@@ -39,6 +41,22 @@ export class VisaApplicationsController {
       throw new BadRequestException({
         status: false,
         message: error.message || 'Failed to create visa application',
+      });
+    }
+  }
+
+  /**
+   * POST /visa-applications/inquiry
+   * Create a visa inquiry when no visa products are available
+   */
+  @Post('inquiry')
+  async createInquiry(@Body() createInquiryDto: CreateInquiryDto) {
+    try {
+      return await this.visaApplicationsService.createInquiry(createInquiryDto);
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to create visa inquiry',
       });
     }
   }
@@ -112,6 +130,78 @@ export class VisaApplicationsController {
       });
     }
   }
+
+  // ========================================
+  // SALES KANBAN ENDPOINTS (must be before :id routes)
+  // ========================================
+
+  /**
+   * GET /visa-applications/sales-kanban
+   * Get all draft applications for the Sales Kanban board
+   */
+  @Get('sales-kanban')
+  async getSalesKanbanApplications(@Query() query: SalesKanbanQueryDto) {
+    try {
+      return await this.visaApplicationsService.getSalesKanbanApplications(query);
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to fetch sales kanban applications',
+      });
+    }
+  }
+
+  /**
+   * GET /visa-applications/sales-kanban/stats
+   * Get statistics for the Sales Kanban board
+   */
+  @Get('sales-kanban/stats')
+  async getSalesKanbanStats() {
+    try {
+      return await this.visaApplicationsService.getSalesKanbanStats();
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to fetch sales kanban stats',
+      });
+    }
+  }
+
+  /**
+   * GET /visa-applications/sales-kanban/destinations
+   * Get unique destinations for filter dropdown
+   */
+  @Get('sales-kanban/destinations')
+  async getSalesKanbanDestinations() {
+    try {
+      return await this.visaApplicationsService.getSalesKanbanDestinations();
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to fetch destinations',
+      });
+    }
+  }
+
+  /**
+   * GET /visa-applications/sales-kanban/visa-types
+   * Get unique visa types for filter dropdown
+   */
+  @Get('sales-kanban/visa-types')
+  async getSalesKanbanVisaTypes() {
+    try {
+      return await this.visaApplicationsService.getSalesKanbanVisaTypes();
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to fetch visa types',
+      });
+    }
+  }
+
+  // ========================================
+  // END SALES KANBAN ENDPOINTS
+  // ========================================
 
   /**
    * GET /visa-applications/:id
@@ -417,6 +507,65 @@ export class VisaApplicationsController {
       throw new BadRequestException({
         status: false,
         message: error.message || 'Failed to trigger reminder check',
+      });
+    }
+  }
+
+  /**
+   * PATCH /visa-applications/:id/sales-status
+   * Update the sales status of an application (for drag-drop in kanban)
+   */
+  @Patch(':id/sales-status')
+  async updateSalesStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateSalesStatusDto,
+  ) {
+    try {
+      return await this.visaApplicationsService.updateSalesStatus(id, dto);
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to update sales status',
+      });
+    }
+  }
+
+  /**
+   * POST /visa-applications/sales-kanban/send-custom-email
+   * Send a custom email to an application's customer
+   */
+  @Post('sales-kanban/send-custom-email')
+  async sendCustomEmail(@Body() dto: SendCustomEmailDto) {
+    try {
+      return await this.visaApplicationsService.sendSalesCustomEmail(
+        dto.applicationId,
+        dto.subject,
+        dto.body,
+      );
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to send custom email',
+      });
+    }
+  }
+
+  /**
+   * POST /visa-applications/sales-kanban/send-template-email
+   * Send a template email to an application's customer
+   */
+  @Post('sales-kanban/send-template-email')
+  async sendTemplateEmail(@Body() dto: SendTemplateEmailDto) {
+    try {
+      return await this.visaApplicationsService.sendSalesTemplateEmail(
+        dto.applicationId,
+        dto.templateType,
+        dto.couponCode,
+      );
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to send template email',
       });
     }
   }
