@@ -20,6 +20,7 @@ import { SubmitApplicationDto } from './dto/submit-application.dto';
 import { SubmitCompleteApplicationDto } from './dto/submit-complete-application.dto';
 import { SalesKanbanQueryDto, UpdateSalesStatusDto, SendCustomEmailDto, SendTemplateEmailDto } from './dto/sales-kanban.dto';
 import { CreateInquiryDto } from './dto/create-inquiry.dto';
+import { CreateManualApplicationDto } from './dto/create-manual-application.dto';
 
 
 @Controller('visa-applications')
@@ -57,6 +58,22 @@ export class VisaApplicationsController {
       throw new BadRequestException({
         status: false,
         message: error.message || 'Failed to create visa inquiry',
+      });
+    }
+  }
+
+  /**
+   * POST /visa-applications/manual
+   * Create a manual visa application (admin-created)
+   */
+  @Post('manual')
+  async createManualApplication(@Body() createManualDto: CreateManualApplicationDto) {
+    try {
+      return await this.visaApplicationsService.createManualApplication(createManualDto);
+    } catch (error) {
+      throw new BadRequestException({
+        status: false,
+        message: error.message || 'Failed to create manual application',
       });
     }
   }
