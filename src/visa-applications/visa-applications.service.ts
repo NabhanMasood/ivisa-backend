@@ -26,6 +26,7 @@ import { VisaApplication, ResubmissionRequest } from './entities/visa-applicatio
 import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '../settings/settings.service';
+import { StripeService } from '../stripe/stripe.service';
 
 @Injectable()
 export class VisaApplicationsService {
@@ -47,6 +48,7 @@ export class VisaApplicationsService {
     private emailService: EmailService,
     private configService: ConfigService,
     private settingsService: SettingsService,
+    private stripeService: StripeService,
   ) { }
 
   /**
@@ -350,6 +352,9 @@ export class VisaApplicationsService {
         totalAmount: parseFloat(app.totalAmount.toString()),
         status: app.status,
         sourceType: app.sourceType || 'application',
+        // Stripe payment link fields for manual applications
+        stripePaymentLinkUrl: app.stripePaymentLinkUrl || null,
+        stripeCheckoutSessionId: app.stripeCheckoutSessionId || null,
         createdAt: app.createdAt.toLocaleDateString('en-GB', {
           day: '2-digit',
           month: 'long',
@@ -882,6 +887,12 @@ export class VisaApplicationsService {
         // Include draft data for step-by-step saving
         draftData: application.draftData || {},
         currentStep: application.currentStep || application.draftData?.currentStep || null,
+        // Source type for manual applications
+        sourceType: application.sourceType || null,
+        // Stripe payment link fields for manual applications
+        stripePaymentLinkId: application.stripePaymentLinkId || null,
+        stripePaymentLinkUrl: application.stripePaymentLinkUrl || null,
+        stripeCheckoutSessionId: application.stripeCheckoutSessionId || null,
       },
     };
   }
@@ -3973,6 +3984,42 @@ export class VisaApplicationsService {
           }
         }
 
+        // Generate Stripe payment link for manual applications
+        let paymentUrl: string | null = null;
+        let stripeSessionId: string | null = null;
+
+        if (totalAmount > 0) {
+          try {
+            // Get customer details for the checkout session
+            const customer = await this.customerRepo.findOne({
+              where: { id: customerId },
+            });
+
+            const checkoutResult = await this.stripeService.createCheckoutSession({
+              applicationId: savedApplication.id,
+              applicationNumber: savedApplication.applicationNumber,
+              amount: Math.round(totalAmount * 100), // Convert to cents/pence
+              currency: 'gbp',
+              customerEmail: dto.email || customer?.email,
+              customerName: customer?.fullname || dto.customer.fullname,
+              productName: `${visaProduct.productName} - ${dto.destinationCountry}`,
+              description: `Visa Application ${savedApplication.applicationNumber} - ${dto.numberOfTravelers} traveler(s)`,
+            });
+
+            paymentUrl = checkoutResult.paymentUrl;
+            stripeSessionId = checkoutResult.sessionId;
+
+            // Save the payment link to the application
+            await this.applicationRepo.update(savedApplication.id, {
+              stripePaymentLinkUrl: paymentUrl,
+              stripePaymentLinkId: stripeSessionId,
+            });
+          } catch (stripeError) {
+            console.error('Failed to create Stripe payment link:', stripeError);
+            // Don't fail the application creation, just log the error
+          }
+        }
+
         return {
           status: true,
           message: 'Manual application created successfully',
@@ -3982,6 +4029,9 @@ export class VisaApplicationsService {
             customerId: savedApplication.customerId,
             status: savedApplication.status,
             sourceType: savedApplication.sourceType,
+            totalAmount,
+            paymentUrl,
+            stripeSessionId,
           },
         };
       } catch (error) {
