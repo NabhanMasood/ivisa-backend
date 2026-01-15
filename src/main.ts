@@ -8,7 +8,9 @@ import cookieParser from 'cookie-parser';
 import { SettingsService } from './settings/settings.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true, // Enable raw body for Stripe webhook signature verification
+  });
 
   // Configure COR with explicit origins
   const allowedOrigins: string[] = [

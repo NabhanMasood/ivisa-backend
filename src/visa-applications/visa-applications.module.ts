@@ -14,6 +14,7 @@ import { CouponsModule } from '../coupons/coupons.module';
 import { CardInfoModule } from '../card-info/card-info.module';
 import { EmailModule } from '../email/email.module';
 import { SettingsModule } from '../settings/settings.module';
+import { StripeModule } from '../stripe/stripe.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SettingsModule } from '../settings/settings.module';
     CardInfoModule, // Import to use CardInfoService
     EmailModule, // Import to use EmailService
     SettingsModule, // Import to use SettingsService
+    StripeModule, // Import to use StripeService for payment links
   ],
   controllers: [VisaApplicationsController],
   providers: [VisaApplicationsService, VisaApplicationsScheduler],

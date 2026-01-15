@@ -54,6 +54,81 @@ export class StripeService {
   }
 
   /**
+   * Create a Stripe Checkout Session for manual applications
+   * Returns a payment link that can be sent to customers
+   */
+  async createCheckoutSession(params: {
+    applicationId: number;
+    applicationNumber: string;
+    amount: number; // In cents (e.g., 5000 for £50.00)
+    currency?: string;
+    customerEmail?: string;
+    customerName?: string;
+    productName: string;
+    description?: string;
+    successUrl?: string;
+    cancelUrl?: string;
+  }) {
+    const stripe = this.getStripeInstance();
+
+    const baseUrl = this.configService.get<string>('FRONTEND_URL') || 'https://visa123.co.uk';
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      customer_email: params.customerEmail,
+      line_items: [
+        {
+          price_data: {
+            currency: params.currency || 'gbp',
+            product_data: {
+              name: params.productName,
+              description: params.description || `Visa Application ${params.applicationNumber}`,
+            },
+            unit_amount: params.amount,
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        applicationId: params.applicationId.toString(),
+        applicationNumber: params.applicationNumber,
+        customerName: params.customerName || '',
+        type: 'manual_application',
+      },
+      success_url: params.successUrl || `${baseUrl}/payment-success?application=${params.applicationNumber}`,
+      cancel_url: params.cancelUrl || `${baseUrl}/?payment=cancelled`,
+    });
+
+    return {
+      sessionId: session.id,
+      paymentUrl: session.url,
+    };
+  }
+
+  /**
+   * Retrieve a checkout session by ID
+   */
+  async retrieveCheckoutSession(sessionId: string) {
+    const stripe = this.getStripeInstance();
+    return stripe.checkout.sessions.retrieve(sessionId);
+  }
+
+  /**
+   * Construct webhook event from raw body
+   */
+  constructWebhookEvent(payload: Buffer, signature: string) {
+    const stripe = this.getStripeInstance();
+    const webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
+
+    if (!webhookSecret) {
+      throw new BadRequestException('STRIPE_WEBHOOK_SECRET is not configured');
+    }
+
+    return stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+  }
+
+  /**
    * Retrieve payment method details from Stripe
    * @param paymentMethodId - Stripe payment method ID (e.g., pm_xxx)
    * @returns Payment method object with card details

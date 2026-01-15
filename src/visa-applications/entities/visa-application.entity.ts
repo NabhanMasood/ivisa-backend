@@ -205,6 +205,16 @@ export class VisaApplication {
   @Column({ type: 'varchar', length: 100, nullable: true })
   travellingFrom?: string | null; // Origin country for inquiries
 
+  // Stripe Payment Link fields (for manual applications)
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  stripePaymentLinkId?: string | null; // Stripe Payment Link ID
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  stripePaymentLinkUrl?: string | null; // URL to send to customer
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  stripeCheckoutSessionId?: string | null; // Checkout session ID when customer pays
+
   @CreateDateColumn()
   createdAt: Date;
 
