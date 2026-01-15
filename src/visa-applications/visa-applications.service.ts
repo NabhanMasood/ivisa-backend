@@ -18,6 +18,7 @@ import { SubmitApplicationDto } from './dto/submit-application.dto';
 import { SubmitCompleteApplicationDto } from './dto/submit-complete-application.dto';
 import { SalesKanbanQueryDto, UpdateSalesStatusDto } from './dto/sales-kanban.dto';
 import { CreateInquiryDto } from './dto/create-inquiry.dto';
+import { CreateManualApplicationDto } from './dto/create-manual-application.dto';
 import { CouponsService } from '../coupons/coupons.service';
 import { CardInfoService } from '../card-info/card-info.service';
 import { CardInfo } from '../card-info/entities/card-info.entity';
@@ -122,24 +123,53 @@ export class VisaApplicationsService {
     const year = new Date().getFullYear();
     const prefix = `VAP-${year}-`;
 
-    // Get the last application number for this year
+    // Get the highest application number for this year by parsing the sequence
     const lastApplication = await this.applicationRepo
       .createQueryBuilder('app')
       .where('app.applicationNumber LIKE :prefix', { prefix: `${prefix}%` })
-      .orderBy('app.id', 'DESC')
+      .orderBy('app.applicationNumber', 'DESC')
       .getOne();
 
     let sequence = 1;
     if (lastApplication) {
-      const lastSequence = parseInt(
-        lastApplication.applicationNumber.split('-')[2],
-      );
-      sequence = lastSequence + 1;
+      const parts = lastApplication.applicationNumber.split('-');
+      if (parts.length >= 3) {
+        const lastSequence = parseInt(parts[2], 10);
+        if (!isNaN(lastSequence)) {
+          sequence = lastSequence + 1;
+        }
+      }
     }
 
     // Pad with zeros (6 digits)
     const paddedSequence = sequence.toString().padStart(6, '0');
     return `${prefix}${paddedSequence}`;
+  }
+
+  /**
+   * Generate a unique application number with retry logic for race conditions
+   */
+  private async generateUniqueApplicationNumber(maxRetries = 5): Promise<string> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const applicationNumber = await this.generateApplicationNumber();
+
+      // Check if this number already exists
+      const existing = await this.applicationRepo.findOne({
+        where: { applicationNumber },
+      });
+
+      if (!existing) {
+        return applicationNumber;
+      }
+
+      // If exists, add a small delay and random offset to avoid collision
+      await new Promise(resolve => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+
+    // Fallback: add timestamp suffix to ensure uniqueness
+    const year = new Date().getFullYear();
+    const timestamp = Date.now().toString().slice(-6);
+    return `VAP-${year}-${timestamp}`;
   }
 
   /**
@@ -319,6 +349,7 @@ export class VisaApplicationsService {
         processingFee: parseFloat(app.processingFee?.toString() || '0'),
         totalAmount: parseFloat(app.totalAmount.toString()),
         status: app.status,
+        sourceType: app.sourceType || 'application',
         createdAt: app.createdAt.toLocaleDateString('en-GB', {
           day: '2-digit',
           month: 'long',
@@ -3802,6 +3833,182 @@ export class VisaApplicationsService {
         error.message || 'Error creating visa inquiry',
       );
     }
+  }
+
+  /**
+   * Create a manual visa application (admin-created)
+   * This creates a visa application with sourceType='manual' and status='manual'
+   */
+  async createManualApplication(dto: CreateManualApplicationDto) {
+    // 1. Handle customer - either get existing by ID, find by email, or create new
+    let customerId: number;
+
+    if (dto.customer.customerId) {
+      // Verify existing customer exists by ID
+      const existingCustomer = await this.customerRepo.findOne({
+        where: { id: dto.customer.customerId },
+      });
+      if (!existingCustomer) {
+        throw new NotFoundException(
+          `Customer with ID ${dto.customer.customerId} not found`,
+        );
+      }
+      customerId = dto.customer.customerId;
+    } else {
+      // Try to create new customer from provided details
+      if (!dto.customer.fullname || !dto.customer.email) {
+        throw new BadRequestException(
+          'Customer name and email are required for new customers',
+        );
+      }
+
+      // First check if customer with this email already exists
+      const existingByEmail = await this.customerRepo.findOne({
+        where: { email: dto.customer.email },
+      });
+
+      if (existingByEmail) {
+        // Use existing customer - same person ordering another visa
+        customerId = existingByEmail.id;
+      } else {
+        // Create new customer
+        const newCustomer = await this.customerRepo.save({
+          fullname: dto.customer.fullname,
+          email: dto.customer.email,
+          phoneNumber: dto.customer.phone || '',
+          residenceCountry: '',
+        });
+        customerId = newCustomer.id;
+      }
+    }
+
+    // 2. Validate visa product exists
+    const visaProduct = await this.visaProductRepo.findOne({
+      where: { id: dto.visaProductId },
+    });
+    if (!visaProduct) {
+      throw new NotFoundException(
+        `Visa product with ID ${dto.visaProductId} not found`,
+      );
+    }
+
+    // 3. Calculate fees from visa product
+    const governmentFee = visaProduct.govtFee * dto.numberOfTravelers;
+    const serviceFee = visaProduct.serviceFee * dto.numberOfTravelers;
+    const totalAmount = governmentFee + serviceFee;
+
+    // 4. Try to save application with retry logic for duplicate key errors
+    const maxRetries = 5;
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Generate a fresh application number for each attempt
+        const year = new Date().getFullYear();
+        const prefix = `VAP-${year}-`;
+
+        // Get the current max sequence
+        const lastApp = await this.applicationRepo
+          .createQueryBuilder('app')
+          .where('app.applicationNumber LIKE :prefix', { prefix: `${prefix}%` })
+          .orderBy('app.applicationNumber', 'DESC')
+          .getOne();
+
+        let sequence = 1;
+        if (lastApp) {
+          const parts = lastApp.applicationNumber.split('-');
+          if (parts.length >= 3) {
+            const lastSeq = parseInt(parts[2], 10);
+            if (!isNaN(lastSeq)) {
+              sequence = lastSeq + 1 + attempt; // Add attempt offset to avoid collision
+            }
+          }
+        }
+
+        const applicationNumber = `${prefix}${sequence.toString().padStart(6, '0')}`;
+
+        // Create and save the application
+        const application = this.applicationRepo.create({
+          applicationNumber,
+          customerId,
+          visaProductId: dto.visaProductId,
+          nationality: dto.nationality,
+          destinationCountry: dto.destinationCountry,
+          visaType: dto.visaType,
+          numberOfTravelers: dto.numberOfTravelers,
+          governmentFee,
+          serviceFee,
+          processingFee: 0,
+          totalAmount,
+          phoneNumber: dto.customer.phone || '',
+          status: 'manual',
+          sourceType: 'manual',
+          emailCaptured: dto.email,
+          emailCapturedAt: new Date(),
+          notes: dto.notes || null,
+          currentStep: 6,
+        });
+
+        const savedApplication = await this.applicationRepo.save(application);
+
+        // Success! Now create travelers
+        if (dto.travelers && dto.travelers.length > 0) {
+          for (const t of dto.travelers) {
+            const traveler = new Traveler();
+            traveler.applicationId = savedApplication.id;
+            traveler.firstName = t.firstName;
+            traveler.lastName = t.lastName;
+            traveler.dateOfBirth = new Date(t.dateOfBirth);
+            if (t.passportNumber) {
+              traveler.passportNumber = t.passportNumber;
+            }
+            if (t.passportExpiryDate) {
+              traveler.passportExpiryDate = new Date(t.passportExpiryDate);
+            }
+            if (t.residenceCountry) {
+              traveler.residenceCountry = t.residenceCountry;
+            }
+            traveler.hasSchengenVisa = t.hasSchengenVisa || false;
+            await this.travelerRepo.save(traveler);
+          }
+        }
+
+        return {
+          status: true,
+          message: 'Manual application created successfully',
+          data: {
+            id: savedApplication.id,
+            applicationNumber: savedApplication.applicationNumber,
+            customerId: savedApplication.customerId,
+            status: savedApplication.status,
+            sourceType: savedApplication.sourceType,
+          },
+        };
+      } catch (error) {
+        // If it's a duplicate key error, retry with next sequence
+        if (error.code === '23505' || error.message?.includes('duplicate key')) {
+          lastError = error;
+          // Small delay before retry
+          await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
+          continue;
+        }
+        // For other errors, throw immediately
+        if (
+          error instanceof NotFoundException ||
+          error instanceof BadRequestException
+        ) {
+          throw error;
+        }
+        throw new BadRequestException(
+          error.message || 'Error creating manual application',
+        );
+      }
+    }
+
+    // All retries failed
+    throw new BadRequestException(
+      'Unable to create application after multiple attempts. Please try again.',
+    );
   }
 
   /**
