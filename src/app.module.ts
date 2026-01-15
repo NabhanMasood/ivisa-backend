@@ -25,7 +25,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
-    // Load .env globally (MUST come before TypeOrmModule)
+    // Load .env gglobally (MUST come before TypeOrmModule)
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env', // ensures it reads from your local .env
