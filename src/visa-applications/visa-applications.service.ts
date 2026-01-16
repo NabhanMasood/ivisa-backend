@@ -3998,8 +3998,8 @@ export class VisaApplicationsService {
             const checkoutResult = await this.stripeService.createCheckoutSession({
               applicationId: savedApplication.id,
               applicationNumber: savedApplication.applicationNumber,
-              amount: Math.round(totalAmount * 100), // Convert to cents/pence
-              currency: 'gbp',
+              amount: Math.round(totalAmount * 100), // Convert to cents
+              currency: 'usd',
               customerEmail: dto.email || customer?.email,
               customerName: customer?.fullname || dto.customer.fullname,
               productName: `${visaProduct.productName} - ${dto.destinationCountry}`,

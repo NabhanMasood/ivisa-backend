@@ -113,6 +113,7 @@ export class VisaProductFieldsService {
         isRequired: createDto.isRequired ?? false,
         displayOrder: displayOrder,
         options: createDto.options,
+        useCountriesList: createDto.useCountriesList ?? false,
         allowedFileTypes: createDto.allowedFileTypes,
         maxFileSizeMB: createDto.maxFileSizeMB,
         minLength: createDto.minLength,
@@ -888,7 +889,8 @@ export class VisaProductFieldsService {
           }
 
 
-          if (field.fieldType === 'dropdown') {
+          // Skip dropdown validation if useCountriesList is true (options come from countries API)
+          if (field.fieldType === 'dropdown' && !field.useCountriesList) {
             if (!field.options || !field.options.includes(response.value)) {
               throw new BadRequestException(
                 `Invalid option for dropdown field: ${field.question}`,
@@ -1776,6 +1778,16 @@ export class VisaProductFieldsService {
         (f) => f.isActive !== false,
       );
 
+      // Log dropdown fields to verify useCountriesList is in database
+      const dropdownProductFields = productFields.filter(f => f.fieldType === 'dropdown');
+      if (dropdownProductFields.length > 0) {
+        console.log('🔍 [PRODUCT DROPDOWN FIELDS FROM DB]', dropdownProductFields.map(f => ({
+          id: f.id,
+          question: f.question?.substring(0, 30),
+          useCountriesList: f.useCountriesList,
+          options: f.options?.length || 0,
+        })));
+      }
 
       // Get existing responses
       let responses: Record<string | number, any> = {};
@@ -2476,6 +2488,11 @@ export class VisaProductFieldsService {
         requestedFieldIdsCount: requestedFieldIdsFromRequests.length,
         combinedFieldsCount: combinedFields.length,
         uniqueFieldsCount: uniqueFields.length,
+        dropdownFields: uniqueFields.filter(f => f.fieldType === 'dropdown').map(f => ({
+          id: f.id,
+          question: f.question?.substring(0, 30),
+          useCountriesList: f.useCountriesList,
+        })),
         resubmissionInfo: application.resubmissionRequests ? {
           totalRequests: application.resubmissionRequests.length,
           unfulfilledRequests: application.resubmissionRequests.filter(r => !r.fulfilledAt).length,
@@ -2950,6 +2967,7 @@ export class VisaProductFieldsService {
                   ? Number(fieldData.displayOrder)
                   : currentFields.length,
               options: fieldData.options,
+              useCountriesList: fieldData.useCountriesList ?? false,
               allowedFileTypes: fieldData.allowedFileTypes,
               maxFileSizeMB: fieldData.maxFileSizeMB,
               minLength: fieldData.minLength,
@@ -3010,6 +3028,8 @@ export class VisaProductFieldsService {
           id: f.id,
           question: f.question,
           displayOrder: f.displayOrder,
+          fieldType: f.fieldType,
+          useCountriesList: f.useCountriesList,
         })));
 
         const savedProduct = await productRepo.save(product);

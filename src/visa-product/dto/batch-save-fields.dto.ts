@@ -39,6 +39,10 @@ export class BatchFieldItemDto {
     @IsOptional()
     options?: string[];
 
+    @IsBoolean()
+    @IsOptional()
+    useCountriesList?: boolean;
+
     @IsArray()
     @IsString({ each: true })
     @IsOptional()

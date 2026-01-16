@@ -46,6 +46,11 @@ export class CreateVisaProductFieldDto {
   @IsOptional()
   options?: string[];
 
+  // For dropdown fields - use countries list instead of custom options
+  @IsBoolean()
+  @IsOptional()
+  useCountriesList?: boolean;
+
   // For upload fields
   @IsArray()
   @IsString({ each: true })

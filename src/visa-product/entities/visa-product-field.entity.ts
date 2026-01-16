@@ -53,6 +53,10 @@ export class VisaProductField {
   @Column({ type: 'json', nullable: true })
   options?: string[]; // e.g., ["Option 1", "Option 2", "Option 3"]
 
+  // For dropdown fields - use countries list instead of custom options
+  @Column({ type: 'boolean', default: false })
+  useCountriesList?: boolean; // If true, populate dropdown from countries API
+
   // For upload fields - allowed file types
   @Column({ type: 'json', nullable: true })
   allowedFileTypes?: string[]; // e.g., ["image/jpeg", "image/png", "application/pdf"]
